@@ -1,0 +1,139 @@
+.workspace-view {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.workspace-header {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.back-button:hover {
+  background: #e9ecef;
+}
+
+.workspace-header h2 {
+  margin: 0;
+  color: #2d3748;
+}
+
+.workspace-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.workspace-tabs button {
+  flex: 1;
+  padding: 1rem;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: #718096;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+}
+
+.workspace-tabs button:hover {
+  color: #2d3748;
+}
+
+.workspace-tabs button.active {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.workspace-tabs button.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #667eea;
+}
+
+.workspace-content {
+  padding: 2rem;
+}
+
+.documents-section {
+  display: grid;
+  gap: 2rem;
+}
+
+.documents-list h3 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #718096;
+}
+
+.document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.document-card {
+  background: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.document-card:hover {
+  border-color: #667eea;
+  transform: translateY(-2px);
+}
+
+.doc-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.document-card h4 {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+  color: #2d3748;
+  word-break: break-word;
+}
+
+.doc-type {
+  background: #667eea;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+
+.doc-date {
+  font-size: 0.75rem;
+  color: #718096;
+  margin: 0;
+} 

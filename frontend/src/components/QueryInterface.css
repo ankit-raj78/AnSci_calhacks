@@ -1,0 +1,274 @@
+.query-interface {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.query-form-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.query-form-section h3 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+}
+
+.query-form-section textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.query-form-section textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.query-form-section button {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.query-form-section button:hover {
+  background: #5a67d8;
+  transform: translateY(-1px);
+}
+
+.query-form-section button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.query-result {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.query-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.query-header h3 {
+  margin: 0;
+  color: #2d3748;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.approved {
+  background: #cce5ff;
+  color: #004085;
+}
+
+.status-badge.rejected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-badge.executed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.plan-section,
+.code-section {
+  margin-bottom: 1.5rem;
+}
+
+.plan-section h4,
+.code-section h4 {
+  margin: 0 0 0.75rem 0;
+  color: #2d3748;
+}
+
+.plan-section pre {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.approval-actions {
+  text-align: center;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-top: 1.5rem;
+}
+
+.approval-actions h4 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+}
+
+.approval-actions button {
+  margin: 0 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.approve-btn {
+  background: #28a745;
+  color: white;
+}
+
+.approve-btn:hover {
+  background: #218838;
+}
+
+.reject-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.reject-btn:hover {
+  background: #c82333;
+}
+
+.feedback-form {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 6px;
+  margin-top: 1.5rem;
+}
+
+.feedback-form h4 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+}
+
+.feedback-form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.feedback-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.feedback-actions button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.feedback-actions button[type="button"] {
+  background: #e2e8f0;
+  color: #4a5568;
+}
+
+.feedback-actions button[type="submit"] {
+  background: #667eea;
+  color: white;
+}
+
+.execution-result {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.execution-result h4 {
+  margin: 0 0 0.75rem 0;
+  color: #2d3748;
+}
+
+.execution-result pre {
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.execution-result pre.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.execution-result pre.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.query-examples {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.query-examples h4 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+}
+
+.query-examples ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.query-examples li {
+  margin: 0.5rem 0;
+  color: #718096;
+  font-size: 0.875rem;
+  line-height: 1.5;
+} 
