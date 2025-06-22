@@ -13,6 +13,7 @@ from functools import wraps
 from .models import AnsciOutline, AnsciSceneBlock, AnsciAnimation
 from .verify import (
     validate_generated_manim_code,
+    validate_and_regenerate_manim_code,
     ValidationResult,
     print_validation_summary,
     generate_regeneration_feedback,
@@ -20,13 +21,19 @@ from .verify import (
 
 from manim import Text, WHITE
 
-# Load environment variables
-import dotenv
-
-dotenv.load_dotenv()
+# Load API key directly from environment
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
+    # Try loading from .env file manually
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                if line.startswith("ANTHROPIC_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip()
+                    break
 
 # Initialize Anthropic client
-api_key = os.getenv("ANTHROPIC_API_KEY")
 ANTHROPIC_CLIENT = anthropic.Anthropic(api_key=api_key)
 
 from manim import *
@@ -206,62 +213,18 @@ def create_ansci_animation(
             },
         )
 
-        # 🔍 IMMEDIATE VALIDATION: Verify the generated Manim code
-        print(f"🔍 Validating Scene {i+1} Manim code...")
-        validation_result = validate_generated_manim_code(manim_code)
+        # 🔍 ENHANCED VALIDATION: Verify and auto-regenerate Manim code if needed
+        print(f"🔍 Validating Scene {i+1} Manim code with enhanced error capture...")
+        
+        context_info = f"Scene {i+1}/{len(outline.blocks)}: {description[:100]}..."
+        manim_code, validation_result = validate_and_regenerate_manim_code(
+            manim_code, 
+            context=context_info,
+            max_attempts=3,
+            use_subprocess=True
+        )
 
-        # Handle validation failures with enhanced retry logic
-        max_retries = 3  # Increased from 2 to 3
-        retry_count = 0
-
-        while not validation_result.is_valid and retry_count < max_retries:
-            retry_count += 1
-            print(
-                f"❌ Scene {i+1} validation failed (attempt {retry_count}/{max_retries}):"
-            )
-            print(f"   Error type: {validation_result.error_type or 'unknown'}")
-            for error in validation_result.errors:
-                print(f"   - {error}")
-
-            if retry_count < max_retries:
-                print(f"🔄 Regenerating Scene {i+1} with enhanced error feedback...")
-
-                # Generate detailed feedback for regeneration
-                feedback = generate_regeneration_feedback(validation_result)
-                print(f"📋 Regeneration feedback for Scene {i+1}:")
-                print(feedback[:300] + "..." if len(feedback) > 300 else feedback)
-
-                # For later attempts, use simpler templates
-                if retry_count >= 2:
-                    print(f"🔄 Using simplified template for attempt {retry_count}")
-                    manim_code = _generate_simple_manim_template(
-                        content=outline_block.text,
-                        scene_name=f"Scene{i+1}",
-                        description=description,
-                        validation_result=validation_result,
-                    )
-                else:
-                    # Regenerate with more specific error-aware prompts
-                    manim_code = _generate_manim_code_with_enhanced_fixes(
-                        content=outline_block.text,
-                        scene_name=f"Scene{i+1}",
-                        description=description,
-                        context={
-                            "history": history,
-                            "outline_title": outline.title,
-                            "scene_index": i,
-                            "total_scenes": len(outline.blocks),
-                            "user_context": user_context,
-                        },
-                        error_instructions="",
-                        validation_result=validation_result,
-                        attempt_number=retry_count,
-                    )
-
-                # Re-validate the regenerated code
-                validation_result = validate_generated_manim_code(manim_code)
-
-        # Final validation check
+        # Final validation check and reporting
         if validation_result.is_valid:
             print(f"✅ Scene {i+1} validation passed!")
             if validation_result.warnings:
@@ -269,7 +232,7 @@ def create_ansci_animation(
                 for warning in validation_result.warnings:
                     print(f"   - {warning}")
         else:
-            print(f"❌ Scene {i+1} validation failed after {max_retries} attempts:")
+            print(f"❌ Scene {i+1} validation failed after maximum attempts:")
             print(f"   Final error type: {validation_result.error_type or 'unknown'}")
             for error in validation_result.errors:
                 print(f"   - {error}")

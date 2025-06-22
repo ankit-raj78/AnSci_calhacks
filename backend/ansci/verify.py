@@ -1,6 +1,7 @@
 """
 Python Code Validation Module
 Validates that generated Manim code from animate.py is syntactically correct and executable
+Enhanced with subprocess error capture and AI-powered code regeneration
 """
 
 import ast
@@ -12,6 +13,8 @@ import tempfile
 import subprocess
 import importlib.util
 from dataclasses import dataclass
+import os
+import anthropic
 
 from .models import AnsciOutline, AnsciSceneBlock, AnsciAnimation
 
@@ -28,6 +31,273 @@ class ValidationResult:
     error_type: Optional[str] = None  # Type of error (syntax, runtime, undefined, etc.)
     error_details: Optional[Dict] = None  # Additional error context
     suggestions: List[str] = None  # Suggestions for fixing the errors
+    subprocess_stderr: Optional[str] = None  # Captured subprocess stderr
+    manim_error_output: Optional[str] = None  # Specific Manim error output
+
+
+def validate_manim_code_with_subprocess(manim_code: str, scene_name: str = "TestScene") -> ValidationResult:
+    """
+    Validate Manim code by actually running it as a subprocess and capturing detailed error output
+    
+    Args:
+        manim_code: The Manim code to validate
+        scene_name: Name of the scene class to render
+        
+    Returns:
+        ValidationResult with detailed error information from subprocess execution
+    """
+    errors = []
+    warnings = []
+    subprocess_stderr = None
+    manim_error_output = None
+    
+    # Create temporary directory and file
+    temp_dir = Path(tempfile.mkdtemp())
+    scene_file = temp_dir / f"{scene_name}.py"
+    
+    try:
+        # Add proper imports to the code
+        full_code = f"""
+from manim import *
+import numpy as np
+
+{manim_code}
+"""
+        
+        # Write code to temporary file
+        with open(scene_file, "w", encoding="utf-8") as f:
+            f.write(full_code)
+        
+        # Try to render with Manim
+        cmd = [
+            sys.executable,
+            "-m", "manim",
+            "-ql",  # Low quality for faster validation
+            "--dry_run",  # Don't actually create video files
+            str(scene_file),
+            scene_name
+        ]
+        
+        print(f"🔍 Validating Manim code by running: {' '.join(cmd)}")
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=temp_dir,
+            timeout=30  # 30 second timeout
+        )
+        
+        # Capture both stdout and stderr
+        subprocess_stderr = result.stderr
+        stdout_output = result.stdout
+        
+        if result.returncode != 0:
+            # Parse the error output to extract meaningful information
+            error_lines = []
+            if subprocess_stderr:
+                error_lines.extend(subprocess_stderr.split('\n'))
+            if stdout_output:
+                error_lines.extend(stdout_output.split('\n'))
+            
+            # Extract specific error types from Manim output
+            manim_errors = []
+            syntax_errors = []
+            import_errors = []
+            runtime_errors = []
+            
+            for line in error_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # Look for specific error patterns
+                if "SyntaxError" in line:
+                    syntax_errors.append(line)
+                elif "ImportError" in line or "ModuleNotFoundError" in line:
+                    import_errors.append(line)
+                elif "NameError" in line:
+                    runtime_errors.append(f"Undefined variable: {line}")
+                elif "AttributeError" in line:
+                    runtime_errors.append(f"Attribute error: {line}")
+                elif "TypeError" in line:
+                    runtime_errors.append(f"Type error: {line}")
+                elif "ValueError" in line:
+                    runtime_errors.append(f"Value error: {line}")
+                elif "Error" in line and line not in manim_errors:
+                    manim_errors.append(line)
+            
+            # Combine all errors
+            all_errors = syntax_errors + import_errors + runtime_errors + manim_errors
+            errors = all_errors if all_errors else [f"Manim execution failed with return code {result.returncode}"]
+            
+            # Store detailed error output
+            manim_error_output = '\n'.join(error_lines[-20:])  # Last 20 lines of error output
+            
+            # Determine primary error type
+            if syntax_errors:
+                error_type = "syntax_error"
+            elif import_errors:
+                error_type = "import_error"
+            elif runtime_errors:
+                error_type = "runtime_error"
+            else:
+                error_type = "manim_error"
+                
+        else:
+            # Validation successful
+            print("✅ Manim code validation successful")
+            return ValidationResult(
+                is_valid=True,
+                errors=[],
+                warnings=[],
+                scene_name=scene_name
+            )
+            
+    except subprocess.TimeoutExpired:
+        errors = ["Manim code execution timed out - possible infinite loop or very slow operations"]
+        error_type = "timeout_error"
+        
+    except Exception as e:
+        errors = [f"Validation process failed: {str(e)}"]
+        error_type = "validation_error"
+        
+    finally:
+        # Cleanup temporary files
+        try:
+            import shutil
+            shutil.rmtree(temp_dir)
+        except:
+            pass
+    
+    return ValidationResult(
+        is_valid=False,
+        errors=errors,
+        warnings=warnings,
+        scene_name=scene_name,
+        error_type=error_type,
+        subprocess_stderr=subprocess_stderr,
+        manim_error_output=manim_error_output
+    )
+
+
+def regenerate_manim_code_with_anthropic(
+    original_code: str, 
+    validation_result: ValidationResult,
+    context: str = "",
+    anthropic_client = None
+) -> str:
+    """
+    Use Anthropic Claude to regenerate Manim code based on error feedback
+    
+    Args:
+        original_code: The original Manim code that failed
+        validation_result: ValidationResult containing error details
+        context: Additional context about what the code should do
+        anthropic_client: Anthropic client instance
+        
+    Returns:
+        Regenerated Manim code
+    """
+    if not anthropic_client:
+        # Load API key
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            # Try loading from .env file manually
+            env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+            if os.path.exists(env_path):
+                with open(env_path, 'r') as f:
+                    for line in f:
+                        if line.startswith("ANTHROPIC_API_KEY="):
+                            api_key = line.split("=", 1)[1].strip()
+                            break
+        
+        if not api_key:
+            print("❌ No Anthropic API key found - cannot regenerate code")
+            return original_code
+            
+        anthropic_client = anthropic.Anthropic(api_key=api_key)
+    
+    # Prepare error context for the AI
+    error_summary = f"""
+MANIM CODE VALIDATION FAILED
+================================
+
+Original Code:
+{original_code}
+
+Errors Found:
+{chr(10).join(validation_result.errors)}
+
+Error Type: {validation_result.error_type}
+
+Subprocess Output:
+{validation_result.subprocess_stderr or 'No subprocess output'}
+
+Detailed Manim Error:
+{validation_result.manim_error_output or 'No detailed output'}
+
+Context: {context}
+"""
+
+    # Create prompt for code regeneration
+    system_prompt = """You are an expert Manim developer. You will be given Python Manim code that failed validation, along with detailed error messages from running the code.
+
+Your task is to analyze the errors and generate corrected Manim code that:
+1. Fixes all the errors mentioned in the error output
+2. Follows proper Manim syntax and best practices
+3. Maintains the original intent and functionality
+4. Uses correct imports and class structure
+
+Common Manim issues to fix:
+- Missing imports (from manim import *)
+- Undefined variables like UP, DOWN, LEFT, RIGHT (use numpy: np.array([0, 1, 0]) instead of UP)
+- Undefined colors like BLUE, RED (use "#0000FF", "#FF0000" or Color.BLUE)
+- Incorrect Scene class structure
+- Missing construct() method
+- Incorrect use of Manim objects and methods
+
+Return only the corrected Python code, with proper imports and structure."""
+
+    user_prompt = f"""Please fix this Manim code based on the validation errors:
+
+{error_summary}
+
+Return the corrected Manim code that will run without errors."""
+
+    try:
+        print("🤖 Using Anthropic Claude to regenerate Manim code...")
+        
+        response = anthropic_client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=4000,
+            system=system_prompt,
+            messages=[
+                {
+                    "role": "user", 
+                    "content": user_prompt
+                }
+            ]
+        )
+        
+        regenerated_code = response.content[0].text
+        
+        # Extract code block if wrapped in markdown
+        if "```python" in regenerated_code:
+            start = regenerated_code.find("```python") + 9
+            end = regenerated_code.find("```", start)
+            regenerated_code = regenerated_code[start:end].strip()
+        elif "```" in regenerated_code:
+            start = regenerated_code.find("```") + 3
+            end = regenerated_code.find("```", start)
+            regenerated_code = regenerated_code[start:end].strip()
+        
+        print("✅ Code regenerated successfully with Anthropic Claude")
+        return regenerated_code
+        
+    except Exception as e:
+        print(f"❌ Failed to regenerate code with Anthropic: {e}")
+        return original_code
 
 
 class PythonCodeValidator:
@@ -718,16 +988,42 @@ class PythonCodeValidator:
             )
 
 
-def validate_generated_manim_code(manim_code: str) -> ValidationResult:
+def validate_generated_manim_code(manim_code: str, use_subprocess: bool = True) -> ValidationResult:
     """
     Comprehensive validation of generated Manim code
-
+    
     Args:
         manim_code: The Manim code string to validate
+        use_subprocess: Whether to use subprocess validation (more accurate but slower)
 
     Returns:
         ValidationResult with comprehensive validation status
     """
+    
+    if use_subprocess:
+        # Use the new subprocess validation for more accurate results
+        print("🔍 Using subprocess validation for accurate Manim code testing...")
+        
+        # Extract scene class name from the code
+        scene_name = "TestScene"  # Default
+        try:
+            tree = ast.parse(manim_code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    # Check if it's a Scene class
+                    for base in node.bases:
+                        if hasattr(base, 'id') and base.id == "Scene":
+                            scene_name = node.name
+                            break
+                        elif hasattr(base, 'attr') and base.attr == "Scene":
+                            scene_name = node.name
+                            break
+        except:
+            pass  # Use default scene name
+        
+        return validate_manim_code_with_subprocess(manim_code, scene_name)
+    
+    # Fallback to original validation method
     validator = PythonCodeValidator()
 
     # Step 1: Syntax validation
@@ -800,14 +1096,15 @@ def validate_generated_manim_code(manim_code: str) -> ValidationResult:
     elif import_result.errors:
         primary_error_type = "import_error"
     elif manim_result.errors:
-        primary_error_type = "manim_structure_error"
+        primary_error_type = "manim_error"
+    elif safety_result.errors:
+        primary_error_type = "safety_error"
 
     return ValidationResult(
         is_valid=len(all_errors) == 0,
         errors=all_errors,
         warnings=all_warnings,
         suggestions=all_suggestions,
-        scene_name=manim_result.scene_name,
         error_type=primary_error_type,
     )
 
@@ -1105,3 +1402,91 @@ if __name__ == "__main__":
     print("✅ Runtime error detection")
     print("✅ Comprehensive testing framework")
     print("\nReady for animation code validation! 🚀")
+
+
+def validate_and_regenerate_manim_code(
+    manim_code: str, 
+    context: str = "",
+    max_attempts: int = 3,
+    use_subprocess: bool = True
+) -> Tuple[str, ValidationResult]:
+    """
+    Validate Manim code and automatically regenerate it using Anthropic if errors are found
+    
+    Args:
+        manim_code: The original Manim code to validate
+        context: Additional context about what the code should do
+        max_attempts: Maximum number of regeneration attempts
+        use_subprocess: Whether to use subprocess validation
+        
+    Returns:
+        Tuple of (final_code, final_validation_result)
+    """
+    current_code = manim_code
+    
+    for attempt in range(max_attempts):
+        print(f"🔍 Validation attempt {attempt + 1}/{max_attempts}")
+        
+        # Validate the current code
+        validation_result = validate_generated_manim_code(current_code, use_subprocess=use_subprocess)
+        
+        if validation_result.is_valid:
+            print(f"✅ Code validation successful on attempt {attempt + 1}")
+            return current_code, validation_result
+        
+        # If validation failed and we have more attempts
+        if attempt < max_attempts - 1:
+            print(f"❌ Validation failed on attempt {attempt + 1}, regenerating with Anthropic...")
+            print(f"   Errors found: {len(validation_result.errors)}")
+            for i, error in enumerate(validation_result.errors[:3], 1):  # Show first 3 errors
+                print(f"   {i}. {error}")
+            
+            # Regenerate the code using Anthropic
+            current_code = regenerate_manim_code_with_anthropic(
+                current_code, 
+                validation_result, 
+                context
+            )
+            
+            print(f"🤖 Code regenerated, testing again...")
+        else:
+            print(f"❌ Validation failed after {max_attempts} attempts")
+            break
+    
+    return current_code, validation_result
+
+
+def get_enhanced_error_feedback(validation_result: ValidationResult) -> str:
+    """
+    Generate detailed error feedback for regeneration prompts
+    
+    Args:
+        validation_result: ValidationResult containing error details
+        
+    Returns:
+        Formatted error feedback string
+    """
+    feedback_parts = []
+    
+    if validation_result.error_type:
+        feedback_parts.append(f"Primary Error Type: {validation_result.error_type}")
+    
+    if validation_result.errors:
+        feedback_parts.append("Specific Errors:")
+        for i, error in enumerate(validation_result.errors, 1):
+            feedback_parts.append(f"  {i}. {error}")
+    
+    if validation_result.subprocess_stderr:
+        feedback_parts.append("Subprocess Error Output:")
+        feedback_parts.append(validation_result.subprocess_stderr)
+    
+    if validation_result.manim_error_output:
+        feedback_parts.append("Detailed Manim Error:")
+        feedback_parts.append(validation_result.manim_error_output)
+    
+    if validation_result.suggestions:
+        feedback_parts.append("Suggestions:")
+        for i, suggestion in enumerate(validation_result.suggestions, 1):
+            feedback_parts.append(f"  {i}. {suggestion}")
+    
+    return "\n".join(feedback_parts)
