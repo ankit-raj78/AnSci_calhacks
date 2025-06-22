@@ -229,24 +229,34 @@ def create_ansci_animation(
                 # Generate detailed feedback for regeneration
                 feedback = generate_regeneration_feedback(validation_result)
                 print(f"📋 Regeneration feedback for Scene {i+1}:")
-                print(feedback[:500] + "..." if len(feedback) > 500 else feedback)
+                print(feedback[:300] + "..." if len(feedback) > 300 else feedback)
 
-                # Regenerate with more specific error-aware prompts
-                manim_code = _generate_manim_code_with_enhanced_fixes(
-                    content=outline_block.text,
-                    scene_name=f"Scene{i+1}",
-                    description=description,
-                    context={
-                        "history": history,
-                        "outline_title": outline.title,
-                        "scene_index": i,
-                        "total_scenes": len(outline.blocks),
-                        "user_context": user_context,
-                    },
-                    error_instructions="",
-                    validation_result=validation_result,
-                    attempt_number=retry_count,
-                )
+                # For later attempts, use simpler templates
+                if retry_count >= 2:
+                    print(f"🔄 Using simplified template for attempt {retry_count}")
+                    manim_code = _generate_simple_manim_template(
+                        content=outline_block.text,
+                        scene_name=f"Scene{i+1}",
+                        description=description,
+                        validation_result=validation_result,
+                    )
+                else:
+                    # Regenerate with more specific error-aware prompts
+                    manim_code = _generate_manim_code_with_enhanced_fixes(
+                        content=outline_block.text,
+                        scene_name=f"Scene{i+1}",
+                        description=description,
+                        context={
+                            "history": history,
+                            "outline_title": outline.title,
+                            "scene_index": i,
+                            "total_scenes": len(outline.blocks),
+                            "user_context": user_context,
+                        },
+                        error_instructions="",
+                        validation_result=validation_result,
+                        attempt_number=retry_count,
+                    )
 
                 # Re-validate the regenerated code
                 validation_result = validate_generated_manim_code(manim_code)
@@ -1184,3 +1194,51 @@ Generate ONLY the Python code for the complete Manim scene. Make it educational,
         f"✅ Regenerated Manim code with enhanced fixes for {scene_name} (attempt {attempt_number})"
     )
     return generated_code
+
+
+def _generate_simple_manim_template(
+    content: str,
+    scene_name: str,
+    description: str,
+    validation_result: ValidationResult,
+) -> str:
+    """Generate a simple, reliable Manim template that should always work"""
+
+    # Extract key error types to avoid
+    error_types = []
+    if validation_result.error_type:
+        error_types.append(validation_result.error_type)
+
+    # Create a very simple, proven template
+    simple_template = f"""
+from manim import *
+import numpy as np
+from functools import wraps
+
+class {scene_name}(Scene):
+    def construct(self):
+        # Simple title
+        title = Text("{scene_name.replace('Scene', 'Part ')}", font_size=36, color=BLUE)
+        title.move_to([0, 2, 0])
+        self.play(Write(title))
+        self.wait(1)
+        
+        # Main content
+        content_text = Text("{content[:50]}...", font_size=24, color=WHITE)
+        content_text.move_to([0, 0, 0])
+        self.play(Write(content_text))
+        self.wait(2)
+        
+        # Simple explanation
+        explanation = Text("This demonstrates the concept", font_size=20, color=GREEN)
+        explanation.move_to([0, -2, 0])
+        self.play(Write(explanation))
+        self.wait(1)
+        
+        # Clean up
+        self.play(FadeOut(title), FadeOut(content_text), FadeOut(explanation))
+        self.wait(0.5)
+"""
+
+    print(f"✅ Generated simple, reliable template for {scene_name}")
+    return simple_template

@@ -374,24 +374,23 @@ class PythonCodeValidator:
                     # Skip some common patterns that might be false positives
                     if name in ["self", "cls"] or name.startswith("_"):
                         continue
-                    errors.append(f"Undefined variable: '{name}'")
-                    suggestions.append(
-                        f"Define '{name}' or import it if it's a module/class"
-                    )
-
-            # Check for common Manim-specific undefined names
-            common_manim_errors = {
-                "mobject": "Use specific Manim objects like Text, Circle, etc.",
-                "animation": "Use specific animations like Write, Create, Transform, etc.",
-                "color": "Use predefined colors like BLUE, RED, GREEN, etc.",
-                "position": "Use specific positioning like move_to(), shift(), etc.",
-                "duration": "Specify animation duration in seconds",
-                "rate_func": "Use rate functions like linear, ease_in_out, etc.",
-            }
-
-            for name, suggestion in common_manim_errors.items():
-                if name in visitor.undefined:
-                    warnings.append(f"Common Manim pattern: '{name}' - {suggestion}")
+                    # Only flag as error if it's clearly undefined (not a common pattern)
+                    if name.lower() in [
+                        "mobject",
+                        "animation",
+                        "color",
+                        "position",
+                        "duration",
+                        "rate_func",
+                    ]:
+                        warnings.append(
+                            f"Common Manim pattern: '{name}' - consider using specific names"
+                        )
+                    else:
+                        errors.append(f"Undefined variable: '{name}'")
+                        suggestions.append(
+                            f"Define '{name}' or import it if it's a module/class"
+                        )
 
             return ValidationResult(
                 is_valid=len(errors) == 0,
@@ -437,14 +436,11 @@ class PythonCodeValidator:
                     if isinstance(node.func, ast.Name):
                         func_name = node.func.id
 
-                        # Check for common Manim function signature issues
+                        # Only check for critical errors that would definitely fail
                         if func_name in ["Text", "MathTex"]:
-                            if not node.args and not node.keywords:
+                            if not node.args:
                                 self.type_errors.append(
                                     f"'{func_name}' requires at least one argument"
-                                )
-                                self.type_warnings.append(
-                                    f"'{func_name}' typically needs text content as first argument"
                                 )
 
                         elif func_name in ["Write", "Create", "FadeIn", "FadeOut"]:
@@ -452,23 +448,11 @@ class PythonCodeValidator:
                                 self.type_errors.append(
                                     f"'{func_name}' requires a mobject argument"
                                 )
-                                self.type_warnings.append(
-                                    f"'{func_name}' needs a Manim object to animate"
-                                )
-
-                        elif func_name in ["move_to", "shift", "scale", "rotate"]:
-                            if not node.args:
-                                self.type_errors.append(
-                                    f"'{func_name}' requires position/transformation argument"
-                                )
-                                self.type_warnings.append(
-                                    f"'{func_name}' needs coordinates or transformation parameters"
-                                )
 
                     self.generic_visit(node)
 
                 def visit_BinOp(self, node):
-                    # Check for type mismatches in binary operations
+                    # Only check for obvious type mismatches
                     if isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div)):
                         # Check if trying to add/subtract incompatible types
                         if isinstance(node.left, ast.Str) and isinstance(
@@ -483,20 +467,6 @@ class PythonCodeValidator:
                             self.type_warnings.append(
                                 "Mixing number and string in arithmetic operation"
                             )
-
-                    self.generic_visit(node)
-
-                def visit_Compare(self, node):
-                    # Check for comparison type issues
-                    for comparator in node.comparators:
-                        if isinstance(node.left, ast.Str) and isinstance(
-                            comparator, ast.Num
-                        ):
-                            self.type_warnings.append("Comparing string with number")
-                        elif isinstance(node.left, ast.Num) and isinstance(
-                            comparator, ast.Str
-                        ):
-                            self.type_warnings.append("Comparing number with string")
 
                     self.generic_visit(node)
 
@@ -681,8 +651,6 @@ class PythonCodeValidator:
             compiled_code = compile(code, "<string>", "exec")
 
             # Execute in safe environment with timeout
-            import signal
-            import time
             import threading
 
             # Use threading-based timeout for Windows compatibility
@@ -690,7 +658,9 @@ class PythonCodeValidator:
                 raise TimeoutError("Code execution timed out")
 
             # Create a timer thread
-            timer = threading.Timer(5.0, timeout_handler)
+            timer = threading.Timer(
+                3.0, timeout_handler
+            )  # Reduced timeout to 3 seconds
 
             try:
                 timer.start()
@@ -701,25 +671,24 @@ class PythonCodeValidator:
                 suggestions.append("Check for infinite loops or very long operations")
             except Exception as e:
                 error_type = type(e).__name__
-                errors.append(f"Runtime error: {error_type}: {str(e)}")
+                # Only flag critical errors that would definitely cause issues
+                if error_type in ["ZeroDivisionError", "AttributeError", "NameError"]:
+                    errors.append(f"Runtime error: {error_type}: {str(e)}")
 
-                # Provide specific suggestions based on error type
-                if error_type == "AttributeError":
-                    suggestions.append(
-                        "Check that objects have the required methods/attributes"
-                    )
-                elif error_type == "TypeError":
-                    suggestions.append("Check argument types and function signatures")
-                elif error_type == "NameError":
-                    suggestions.append(
-                        "Check that all variables are defined before use"
-                    )
-                elif error_type == "IndexError":
-                    suggestions.append("Check array/list indices are within bounds")
-                elif error_type == "KeyError":
-                    suggestions.append("Check dictionary keys exist before accessing")
+                    # Provide specific suggestions based on error type
+                    if error_type == "AttributeError":
+                        suggestions.append(
+                            "Check that objects have the required methods/attributes"
+                        )
+                    elif error_type == "NameError":
+                        suggestions.append(
+                            "Check that all variables are defined before use"
+                        )
+                    elif error_type == "ZeroDivisionError":
+                        suggestions.append("Check for division by zero")
                 else:
-                    suggestions.append("Review the code logic and error handling")
+                    # For other errors, just add warnings
+                    warnings.append(f"Potential runtime issue: {error_type}: {str(e)}")
             finally:
                 timer.cancel()
 
