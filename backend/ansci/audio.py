@@ -371,7 +371,17 @@ class AudioNarrationService:
 
         try:
             # Generate audio using LMNT async API
-            audio_data = asyncio.run(self._lmnt_synthesize(text))
+            # Handle the case where we're already in an event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an event loop, create a new one in a thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._lmnt_synthesize(text))
+                    audio_data = future.result(timeout=30)
+            except RuntimeError:
+                # No event loop running, safe to use asyncio.run
+                audio_data = asyncio.run(self._lmnt_synthesize(text))
 
             if audio_data:
                 # Save raw LMNT audio first
@@ -397,6 +407,9 @@ class AudioNarrationService:
 
         except Exception as e:
             print(f"❌ Error calling LMNT TTS: {e}")
+            # Clean up any leftover coroutines
+            import warnings
+            warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*coroutine.*never awaited.*")
             # Try fallback TTS
             return self._fallback_system_tts(text, scene_name, target_duration)
 

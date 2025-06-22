@@ -1,83 +1,87 @@
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from io import BytesIO
-import argparse
-import sys
 from pathlib import Path
+import traceback
+import logging
 from ansci.workflow import create_animation
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def main(paper_path: str, output_path: str, prompt: str | None = None):
+app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Frontend URLs
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Create an output directory for animations
+output_dir = Path("output")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+# Mount the output directory to serve static files (the generated videos)
+app.mount("/videos", StaticFiles(directory=output_dir), name="videos")
+
+@app.post("/api/create-animation")
+async def create_animation_endpoint(
+    file: UploadFile = File(...), 
+    scope: str = Form(...)
+):
     """
-    Main entry point for PDF to Animation workflow
+    API endpoint to generate an animation from a PDF file.
     
     Args:
-        paper_path: Path to PDF file
-        output_path: Output directory for generated videos
-        prompt: Optional custom prompt for animation generation
+        file: The uploaded PDF file.
+        scope: The animation scope (e.g., "High-Level Summary", "Core Concepts").
     """
-    print("🎬🎙️ AnSci Animation Generator")
-    print("=" * 40)
-    print(f"📄 Input PDF: {paper_path}")
-    print(f"📁 Output: {output_path}")
-    if prompt:
-        print(f"💭 Custom prompt: {prompt[:50]}...")
-    print()
-    
-    # Validate input file
-    if not Path(paper_path).exists():
-        print(f"❌ Error: PDF file not found: {paper_path}")
-        sys.exit(1)
-    
-    if not paper_path.lower().endswith('.pdf'):
-        print(f"❌ Error: File must be a PDF: {paper_path}")
-        sys.exit(1)
-    
-    # Create output directory
-    output_dir = Path(output_path)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
+    logger.info(f"Received request for animation generation. Scope: {scope}, File: {file.filename}")
+
+    if not file.filename.lower().endswith('.pdf'):
+        logger.error("Uploaded file is not a PDF.")
+        raise HTTPException(status_code=400, detail="File must be a PDF.")
+
     try:
-        # Run the complete workflow
-        with open(paper_path, "rb") as paper_file:
-            paper_bytes = BytesIO(paper_file.read())
-            video_paths = create_animation(paper_bytes, output_path, prompt)
+        # Read the uploaded file into a BytesIO object
+        paper_bytes = BytesIO(await file.read())
+        
+        # Use the scope as the prompt for animation generation
+        prompt = scope
+        
+        logger.info("Starting animation generation workflow...")
+        # The create_animation function expects an output path as a string
+        video_paths = create_animation(paper_bytes, str(output_dir), prompt)
         
         if video_paths:
-            print(f"\n🎉 SUCCESS! Generated {len(video_paths)} animation videos:")
-            for i, path in enumerate(video_paths):
-                print(f"   {i+1}. {Path(path).name}")
-            print(f"\n📂 All files saved to: {output_path}")
-            print("✅ Animation generation complete!")
+            logger.info(f"Successfully generated {len(video_paths)} videos.")
+            # Create web-accessible URLs for the videos
+            video_urls = [f"/videos/{Path(p).name}" for p in video_paths]
+            return JSONResponse(
+                content={
+                    "message": "Animation generated successfully!",
+                    "video_urls": video_urls,
+                }
+            )
         else:
-            print("❌ Failed to generate animations")
-            sys.exit(1)
-            
-    except FileNotFoundError:
-        print(f"❌ Error: Could not read PDF file: {paper_path}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Error during animation generation: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+            logger.error("Animation generation failed, no video paths returned.")
+            raise HTTPException(status_code=500, detail="Failed to generate animations.")
 
+    except Exception as e:
+        logger.error(f"An error occurred during animation generation: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+@app.get("/")
+def read_root():
+    return {"message": "AnSci Backend is running."}
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Generate educational animations from PDF papers with AI-powered narration",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python main.py --paper paper.pdf --output ./animations
-  python main.py --paper research.pdf --output ./videos --prompt "Focus on the mathematical concepts"
-  python main.py --paper attention.pdf --output ./transformer_videos --prompt "Explain the attention mechanism visually"
-        """
-    )
-    parser.add_argument("--paper", type=str, required=True, 
-                       help="Path to the PDF paper to animate")
-    parser.add_argument("--output", type=str, required=True,
-                       help="Output directory for generated animation videos")
-    parser.add_argument("--prompt", type=str,
-                       help="Custom prompt to guide animation generation (optional)")
-    
-    args = parser.parse_args()
-    main(args.paper, args.output, args.prompt)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
