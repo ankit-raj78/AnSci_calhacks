@@ -11,6 +11,11 @@ from anthropic.types import MessageParam
 from typing import Generator, List
 from functools import wraps
 from .models import AnsciOutline, AnsciSceneBlock, AnsciAnimation
+from .verify import (
+    validate_generated_manim_code,
+    ValidationResult,
+    print_validation_summary,
+)
 
 from manim import Text, WHITE
 
@@ -161,6 +166,7 @@ def create_ansci_animation(
 ) -> Generator[AnsciSceneBlock, None, None]:
     """
     Create animation scene blocks from chat history and outline using Anthropic SDK
+    Includes automatic validation of generated Manim code
 
     Args:
         history: Chat history containing paper content and user messages
@@ -198,6 +204,56 @@ def create_ansci_animation(
                 "user_context": user_context,
             },
         )
+
+        # 🔍 IMMEDIATE VALIDATION: Verify the generated Manim code
+        print(f"🔍 Validating Scene {i+1} Manim code...")
+        validation_result = validate_generated_manim_code(manim_code)
+
+        # Handle validation failures with retry logic
+        max_retries = 2
+        retry_count = 0
+
+        while not validation_result.is_valid and retry_count < max_retries:
+            retry_count += 1
+            print(
+                f"❌ Scene {i+1} validation failed (attempt {retry_count}/{max_retries}):"
+            )
+            for error in validation_result.errors:
+                print(f"   - {error}")
+
+            if retry_count < max_retries:
+                print(f"🔄 Regenerating Scene {i+1} with improved prompts...")
+
+                # Regenerate with more specific error-aware prompts
+                manim_code = _generate_manim_code_with_validation_fixes(
+                    content=outline_block.text,
+                    scene_name=f"Scene{i+1}",
+                    description=description,
+                    context={
+                        "history": history,
+                        "outline_title": outline.title,
+                        "scene_index": i,
+                        "total_scenes": len(outline.blocks),
+                        "user_context": user_context,
+                    },
+                    previous_errors=validation_result.errors,
+                )
+
+                # Re-validate the regenerated code
+                validation_result = validate_generated_manim_code(manim_code)
+
+        # Final validation check
+        if validation_result.is_valid:
+            print(f"✅ Scene {i+1} validation passed!")
+            if validation_result.warnings:
+                print(f"⚠️  Warnings for Scene {i+1}:")
+                for warning in validation_result.warnings:
+                    print(f"   - {warning}")
+        else:
+            print(f"❌ Scene {i+1} validation failed after {max_retries} attempts:")
+            for error in validation_result.errors:
+                print(f"   - {error}")
+            print(f"⚠️  Proceeding with Scene {i+1} despite validation errors...")
 
         scene_block = AnsciSceneBlock(
             transcript=transcript, description=description, manim_code=manim_code
@@ -276,7 +332,7 @@ def create_complete_animation(
     outline: AnsciOutline, history: list[MessageParam]
 ) -> AnsciAnimation:
     """
-    Create a complete animation from an outline
+    Create a complete animation from an outline with comprehensive validation
 
     Args:
         outline: Structured outline for the animation
@@ -285,7 +341,31 @@ def create_complete_animation(
     Returns:
         AnsciAnimation: Complete animation ready for rendering
     """
+    print("🎬 Creating complete animation with validation...")
+
+    # Generate all scene blocks with validation
     scene_blocks = list(create_ansci_animation(history=history, outline=outline))
+
+    # Final validation summary
+    validation_results = []
+    for i, scene_block in enumerate(scene_blocks):
+        # Quick validation check for final summary
+        validation_result = validate_generated_manim_code(scene_block.manim_code)
+        validation_result.scene_name = f"Scene{i+1}"
+        validation_results.append(validation_result)
+
+    # Print final validation summary
+    print_validation_summary(validation_results)
+
+    # Check if any scenes failed validation
+    failed_scenes = [
+        i + 1 for i, result in enumerate(validation_results) if not result.is_valid
+    ]
+    if failed_scenes:
+        print(
+            f"⚠️  Warning: Scenes {failed_scenes} have validation issues but will proceed with rendering"
+        )
+
     return AnsciAnimation(blocks=scene_blocks)
 
 
@@ -692,7 +772,6 @@ def _get_scene_specific_content(scene_name: str, content: str) -> str:
                       font_size=AnimationPresets.BODY_SIZE, color=RED)
         problem_pos = LayoutManager.safe_position(problem, [0, -1.5, 0])
         problem.move_to(problem_pos)
-        self.play(Write(problem))
         """
 
     elif "2" in scene_name:  # Second scene - attention
@@ -787,3 +866,199 @@ def create_audiovisual_scene_block(
         description=f"[WITH AUDIO] {scene_block.description}",
         manim_code=audiovisual_manim_code,
     )
+
+
+def _generate_manim_code_with_validation_fixes(
+    content: str,
+    scene_name: str,
+    description: str,
+    context: dict,
+    previous_errors: List[str],
+) -> str:
+    """Generate Manim code with specific fixes for validation errors"""
+
+    # Build error-specific instructions
+    error_instructions = ""
+    if previous_errors:
+        error_instructions = "\n\nPREVIOUS VALIDATION ERRORS TO FIX:\n"
+        for error in previous_errors:
+            error_instructions += f"- {error}\n"
+
+        error_instructions += "\nSPECIFIC FIXES REQUIRED:\n"
+
+        # Add specific fixes based on common error patterns
+        if any("Syntax Error" in error for error in previous_errors):
+            error_instructions += (
+                "- Ensure all parentheses, brackets, and quotes are properly matched\n"
+            )
+            error_instructions += "- Check for proper indentation throughout the code\n"
+            error_instructions += "- Verify all statements end properly\n"
+
+        if any("Missing Scene class" in error for error in previous_errors):
+            error_instructions += "- MUST define a class that inherits from Scene\n"
+            error_instructions += "- Example: class Scene1(Scene):\n"
+
+        if any("Missing construct() method" in error for error in previous_errors):
+            error_instructions += (
+                "- MUST include a construct(self) method in the Scene class\n"
+            )
+            error_instructions += "- Example: def construct(self):\n"
+
+        if any("Import error" in error for error in previous_errors):
+            error_instructions += (
+                "- Use only basic Manim imports: from manim import *\n"
+            )
+            error_instructions += (
+                "- Avoid external libraries like librosa, scipy, etc.\n"
+            )
+            error_instructions += (
+                "- Include: import numpy as np, from functools import wraps\n"
+            )
+
+    # Try to use Anthropic SDK for intelligent generation with error fixes
+    if ANTHROPIC_CLIENT:
+        try:
+            return _generate_manim_code_with_anthropic_and_fixes(
+                content, scene_name, description, context, error_instructions
+            )
+        except Exception as e:
+            print(f"⚠️  Anthropic generation with fixes failed: {e}")
+            print("🔄 Falling back to template-based generation...")
+
+    # Fallback to template-based generation
+    return _generate_manim_code_template(content, scene_name, description)
+
+
+def _generate_manim_code_with_anthropic_and_fixes(
+    content: str,
+    scene_name: str,
+    description: str,
+    context: dict,
+    error_instructions: str,
+) -> str:
+    """Generate Manim code using Anthropic SDK with specific error fixes"""
+
+    # Build context-aware prompt with error fixes
+    context_info = ""
+    if context:
+        context_info = f"""
+ANIMATION CONTEXT:
+- Overall Title: {context.get('outline_title', 'N/A')}
+- Scene {context.get('scene_index', 0) + 1} of {context.get('total_scenes', 1)}
+- User Preferences: {context.get('user_context', {}).get('user_preferences', [])}
+- Key Topics: {context.get('user_context', {}).get('key_topics', [])}
+- Focus Areas: {context.get('user_context', {}).get('focus_areas', [])}
+"""
+
+    prompt = f"""
+You are an expert Manim animator creating educational content. Generate a complete, working Manim scene class that visualizes the given content.
+
+CONTENT TO ANIMATE: {content}
+SCENE NAME: {scene_name}
+DESCRIPTION: {description}
+{context_info}
+{error_instructions}
+
+CRITICAL REQUIREMENTS (MUST FOLLOW EXACTLY):
+1. Create a complete Scene class named "{scene_name}" that inherits from Scene
+2. Include a construct(self) method with the animation logic
+3. Use safe positioning with LayoutManager.safe_position() for all objects
+4. Include quality validation with @validate_scene decorator
+5. Use AnimationPresets for consistent timing and styling
+6. Make the animation educational and visually engaging
+7. Include proper imports and quality assurance components
+8. The animation should be 45-60 seconds long with detailed explanations and multiple scenes
+9. Use multiple visual elements, step-by-step reveals, and rich transitions for high production value
+10. Include detailed diagrams, equations, graphs, and interactive elements
+11. Use vibrant colors, professional typography, and smooth transitions with variety
+12. Focus on making complex concepts easy to understand with rich, detailed visuals
+13. Consider the context and user preferences provided
+14. If this is part of a series, ensure it builds appropriately on previous concepts
+15. IMPORTANT: Only use basic Manim imports - do NOT import external libraries like librosa, scipy, etc.
+16. Use only: from manim import *, numpy as np, functools.wraps - no other imports
+17. Keep animations simple and avoid complex mathematical computations
+18. Include multiple visual elements: detailed graphs, step-by-step equations, comprehensive diagrams, animated text
+19. Add strategic wait() periods (2-4 seconds) to let viewers absorb information
+20. Use Write(), Create(), Transform(), FadeIn(), FadeOut(), ReplacementTransform() for engaging transitions
+21. Create professional-quality educational content with detailed narration timing
+22. Include at least 5-8 distinct visual elements or animation sequences
+23. Use multiple colors, highlight important parts, and create visual hierarchy
+24. Add explanatory text boxes, labels, and annotations for clarity
+25. Make each animation comprehensive and self-contained for maximum educational value
+
+TEMPLATE STRUCTURE:
+```python
+from manim import *
+import numpy as np
+from functools import wraps
+
+# Quality Assurance Components
+class LayoutManager:
+    SAFE_MARGIN = 0.5
+    SCREEN_WIDTH = 14.22
+    SCREEN_HEIGHT = 8.0
+    LEFT_BOUND = -SCREEN_WIDTH/2 + SAFE_MARGIN
+    RIGHT_BOUND = SCREEN_WIDTH/2 - SAFE_MARGIN
+    TOP_BOUND = SCREEN_HEIGHT/2 - SAFE_MARGIN
+    BOTTOM_BOUND = -SCREEN_HEIGHT/2 + SAFE_MARGIN
+    
+    @classmethod
+    def safe_position(cls, mobject, target_position):
+        x, y, z = target_position
+        # [implement safe positioning logic]
+        return np.array([x, y, z])
+
+def validate_scene(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        result = func(self, *args, **kwargs)
+        print("✅ Quality check: Scene validated")
+        return result
+    return wrapper
+
+class AnimationPresets:
+    FAST = 0.5
+    NORMAL = 1.0
+    SLOW = 1.5
+    TITLE_SIZE = 28
+    SUBTITLE_SIZE = 22
+    BODY_SIZE = 14
+
+class {scene_name}(Scene):
+    @validate_scene
+    def construct(self):
+        # Your animation logic here
+        pass
+```
+
+Generate ONLY the Python code for the complete Manim scene. Make it educational, visually appealing, and focused on the content provided. Ensure it passes all validation checks.
+"""
+
+    response = ANTHROPIC_CLIENT.messages.create(
+        model="claude-sonnet-4-20250514",  # Use Sonnet 4 for highest quality Manim code generation
+        max_tokens=8192,  # Maximum tokens for Sonnet 4 - allows for very detailed animations
+        temperature=0.2,  # Lower temperature for more consistent, error-free code
+        stream=True,  # Enable streaming for long requests
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    # Collect streamed response
+    full_response = ""
+    for chunk in response:
+        if chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
+            full_response += chunk.delta.text
+
+    generated_code = full_response
+
+    # Extract code from response if it's wrapped in markdown
+    if "```python" in generated_code:
+        start = generated_code.find("```python") + 9
+        end = generated_code.find("```", start)
+        generated_code = generated_code[start:end].strip()
+    elif "```" in generated_code:
+        start = generated_code.find("```") + 3
+        end = generated_code.find("```", start)
+        generated_code = generated_code[start:end].strip()
+
+    print(f"✅ Regenerated Manim code with validation fixes for {scene_name}")
+    return generated_code
