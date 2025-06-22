@@ -210,12 +210,12 @@ def create_ansci_animation(
         print(f"🎬 Generating Scene {i+1}/{len(outline.blocks)}...")
         
         # Generate scene components from outline with context
-        transcript = _generate_transcript_from_outline(outline_block.content, i, user_context)
-        description = _generate_scene_description(outline_block.content, i, user_context)
+        transcript = _generate_transcript_from_outline(outline_block.text, i, user_context)
+        description = _generate_scene_description(outline_block.text, i, user_context)
         
         # Generate Manim code using Anthropic with full context
         manim_code = _generate_manim_code_from_content(
-            content=outline_block.content,
+            content=outline_block.text,
             scene_name=f"Scene{i+1}",
             description=description,
             context={
@@ -247,17 +247,28 @@ def _extract_context_from_history(history: list[dict]) -> dict:
     }
     
     for message in history:
-        content = message.get("content", "").lower()
+        content = message.get("content", "")
         role = message.get("role", "")
         
         if role == "user":
+            # Handle content as list (document + text) or string
+            text_content = ""
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "text":
+                        text_content += item.get("text", "") + " "
+            elif isinstance(content, str):
+                text_content = content
+            
+            text_content = text_content.lower()
+            
             # Extract user preferences and questions
-            if "explain" in content or "show" in content:
-                context["user_preferences"].append(content)
-            if "?" in content:
-                context["questions"].append(content)
-            if "focus" in content or "emphasize" in content:
-                context["focus_areas"].append(content)
+            if "explain" in text_content or "show" in text_content:
+                context["user_preferences"].append(text_content)
+            if "?" in text_content:
+                context["questions"].append(text_content)
+            if "focus" in text_content or "emphasize" in text_content:
+                context["focus_areas"].append(text_content)
         
         # Extract key topics mentioned
         key_terms = ["attention", "transformer", "rnn", "lstm", "parallel", "sequential", "bert", "gpt"]
