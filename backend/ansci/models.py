@@ -29,3 +29,29 @@ class AnsciAnimation(BaseModel):
     """Animation - a list of scene blocks forming the animation"""
 
     blocks: list[AnsciSceneBlock] = Field(description="The blocks of the scene")
+
+
+class SceneDescription(BaseModel):
+    """Composite scene description containing both transcript and visual description"""
+
+    #     transcript: list[str] = Field(
+    #         description="""
+    # 30-60 seconds of narration (about 75-150 words), educational but accessible tone.
+    # Return a list of strings, each string being a sentence or phrase of the transcript.
+    # """
+    #     )
+
+    transcript: str = Field(
+        description="30-60 seconds of narration (about 75-150 words), educational but accessible tone."
+    )
+
+    description: str = Field(
+        description="Visual description of animations, 20-40 words maximum, specific about what viewers will see"
+    )
+
+
+class TranscriptChunk(BaseModel):
+    """Chunk of transcript with start and end times"""
+
+    text: str = Field(description="The text of the chunk")
+    duration: float = Field(description="Durations of the chunk")

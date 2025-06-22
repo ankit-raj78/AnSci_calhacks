@@ -8,21 +8,9 @@ Uses Anthropic SDK for intelligent Manim code generation
 import os
 import anthropic
 from anthropic.types import MessageParam, ToolUseBlock
-from typing import Generator, List, TypedDict
+from typing import Generator, List
 from functools import wraps
-from .models import AnsciOutline, AnsciSceneBlock, AnsciAnimation
-from pydantic import BaseModel, Field
-
-
-class SceneDescription(BaseModel):
-    """Composite scene description containing both transcript and visual description"""
-
-    transcript: str = Field(
-        description="30-60 seconds of narration (about 75-150 words), educational but accessible tone"
-    )
-    description: str = Field(
-        description="Visual description of animations, 20-40 words maximum, specific about what viewers will see"
-    )
+from .models import AnsciOutline, AnsciSceneBlock, AnsciAnimation, SceneDescription
 
 
 from .verify import (
@@ -277,71 +265,6 @@ def create_ansci_animation(
         yield scene_block
 
 
-# def _extract_context_from_history(history: list[MessageParam]) -> dict:
-#     """Extract relevant context from chat history for better animation generation"""
-#     context = {
-#         "user_preferences": [],
-#         "key_topics": [],
-#         "focus_areas": [],
-#         "questions": [],
-#     }
-
-#     for message in history:
-#         content = message.get("content", "")
-#         role = message.get("role", "")
-
-#         if role == "user":
-#             # Handle content as list (document + text) or string
-#             text_content = ""
-#             if isinstance(content, list):
-#                 for item in content:
-#                     if isinstance(item, dict) and item.get("type") == "text":
-#                         text_content += item.get("text", "") + " "
-#             elif isinstance(content, str):
-#                 text_content = content
-
-#             text_content = text_content.lower()
-
-#             # Extract user preferences and questions
-#             if "explain" in text_content or "show" in text_content:
-#                 context["user_preferences"].append(text_content)
-#             if "?" in text_content:
-#                 context["questions"].append(text_content)
-#             if "focus" in text_content or "emphasize" in text_content:
-#                 context["focus_areas"].append(text_content)
-
-#         # Extract key topics mentioned
-#         key_terms = [
-#             "attention",
-#             "transformer",
-#             "rnn",
-#             "lstm",
-#             "parallel",
-#             "sequential",
-#             "bert",
-#             "gpt",
-#         ]
-
-#         # Convert content to string for searching
-#         content_str = ""
-#         if isinstance(content, str):
-#             content_str = content
-#         elif isinstance(content, list):
-#             for item in content:
-#                 if isinstance(item, dict) and item.get("type") == "text":
-#                     content_str += item.get("text", "") + " "
-#                 elif isinstance(item, str):
-#                     content_str += item + " "
-
-#         content_str = content_str.lower()
-
-#         for term in key_terms:
-#             if term in content_str:
-#                 context["key_topics"].append(term)
-
-#     return context
-
-
 def create_complete_animation(
     outline: AnsciOutline, history: list[MessageParam]
 ) -> AnsciAnimation:
@@ -444,10 +367,6 @@ Generate ONLY the JSON object, no additional formatting.
         return SceneDescription(**tool_block.input)  # type: ignore
     else:
         return None
-
-    # # Extract tool result
-    # tool_use = next(block for block in response.content if block.type == "tool_use")  # type: ignore  # noqa: E501
-    # return
 
 
 def _generate_manim_code_from_content(

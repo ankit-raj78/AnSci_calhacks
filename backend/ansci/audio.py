@@ -9,12 +9,12 @@ import json
 import subprocess
 import asyncio
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 import dotenv
 from lmnt.api import Speech
 
 from .animate import create_audiovisual_scene_block
-from .models import AnsciSceneBlock, AnsciAnimation
+from .models import AnsciSceneBlock, AnsciAnimation, TranscriptChunk
 
 dotenv.load_dotenv()
 
@@ -34,7 +34,7 @@ class AudioNarrationService:
         scene_block: AnsciSceneBlock,
         scene_name: str,
         target_duration: float | None = None,
-    ) -> Optional[str]:
+    ) -> Optional[tuple[str, list[TranscriptChunk]]]:
         """
         Generate audio narration for a single scene block
         Audio is adjusted to fit the animation duration (animation takes priority)
@@ -76,162 +76,6 @@ class AudioNarrationService:
         except Exception as e:
             print(f"❌ Error generating narration for {scene_name}: {e}")
             return None
-
-    def generate_narrations_for_animation(
-        self, animation: AnsciAnimation, video_paths: List[str]
-    ) -> List[str]:
-        """
-        Generate synchronized narrations for all scenes in an animation
-
-        Args:
-            animation: Animation containing scene blocks
-            video_paths: Optional list of video file paths to match duration
-
-        Returns:
-            List of paths to generated audio files
-        """
-        audio_paths = []
-
-        for i, scene_block in enumerate(animation.blocks):
-            scene_name = f"Scene{i+1}"
-
-            # Get target duration from video if available
-            target_duration = None
-            if video_paths and i < len(video_paths):
-                target_duration = self._get_video_duration(video_paths[i])
-                print(f"🎬 Matching audio to video duration: {target_duration:.1f}s")
-
-            audio_path = self.generate_narration_for_scene(
-                scene_block, scene_name, target_duration
-            )
-
-            if audio_path:
-                audio_paths.append(audio_path)
-
-        return audio_paths
-
-    def merge_audio_with_video(
-        self, video_path: str, audio_path: str, output_name: str
-    ) -> str:
-        """
-        Merge audio narration with video animation - prioritizing video duration
-
-        Args:
-            video_path: Path to video file
-            audio_path: Path to audio file
-            output_name: Name for output file
-
-        Returns:
-            Path to merged video file
-        """
-        if not output_name:
-            video_name = Path(video_path).stem
-            output_name = f"{video_name}_with_audio"
-
-        output_path = self.output_dir / f"{output_name}.mp4"
-
-        # Get video duration to ensure audio matches
-        video_duration = self._get_video_duration(video_path)
-
-        # Use ffmpeg to merge audio and video - prioritizing video duration
-        cmd = [
-            "ffmpeg",
-            "-y",  # -y to overwrite output files
-            "-i",
-            video_path,
-            "-i",
-            audio_path,
-            "-c:v",
-            "copy",  # Copy video stream without re-encoding
-            "-c:a",
-            "aac",  # Encode audio as AAC
-            "-map",
-            "0:v:0",  # Map video from first input
-            "-map",
-            "1:a:0",  # Map audio from second input
-            "-t",
-            str(video_duration),  # Use video duration as master
-            "-af",
-            f"apad=whole_dur={video_duration}",  # Pad audio to match video duration
-            str(output_path),
-        ]
-
-        try:
-            print(f"🎬 Merging audio with video (prioritizing video duration)...")
-            print(f"   📹 Video: {Path(video_path).name} ({video_duration:.1f}s)")
-            print(f"   🎙️  Audio: {Path(audio_path).name}")
-            print(f"   🎯 Target: {output_name}.mp4 ({video_duration:.1f}s)")
-
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            print(f"✅ Merged video created: {output_path}")
-
-            # Verify the final video has the correct duration
-            final_duration = self._get_video_duration(str(output_path))
-            print(
-                f"   ✅ Final duration: {final_duration:.1f}s (matches video: {abs(final_duration - video_duration) < 0.5})"
-            )
-
-            return str(output_path)
-
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Error merging audio with video: {e.stderr}")
-            print(f"   Command was: {' '.join(cmd)}")
-
-            # Fallback: Try simpler merge command
-            simple_cmd = [
-                "ffmpeg",
-                "-y",
-                "-i",
-                video_path,
-                "-i",
-                audio_path,
-                "-c:v",
-                "copy",
-                "-c:a",
-                "aac",
-                "-map",
-                "0:v",
-                "-map",
-                "1:a",
-                str(output_path),
-            ]
-
-            try:
-                print("🔄 Trying fallback merge command...")
-                subprocess.run(simple_cmd, capture_output=True, text=True, check=True)
-                print(f"✅ Fallback merge successful: {output_path}")
-                return str(output_path)
-            except subprocess.CalledProcessError as e2:
-                print(f"❌ Fallback merge also failed: {e2.stderr}")
-                return ""
-
-    def create_complete_audiovisual_animation(
-        self, animation: AnsciAnimation, video_paths: List[str]
-    ) -> List[str]:
-        """
-        Create complete audiovisual animations by merging all videos with narrations
-
-        Args:
-            animation: Animation containing scene blocks
-            video_paths: List of video file paths
-
-        Returns:
-            List of paths to merged audiovisual files
-        """
-        # Generate synchronized narrations
-        audio_paths = self.generate_narrations_for_animation(animation, video_paths)
-
-        # Merge each video with its corresponding audio
-        merged_paths = []
-        for i, (video_path, audio_path) in enumerate(zip(video_paths, audio_paths)):
-            if audio_path:
-                merged_path = self.merge_audio_with_video(
-                    video_path, audio_path, f"Scene{i+1}_audiovisual"
-                )
-                if merged_path:
-                    merged_paths.append(merged_path)
-
-        return merged_paths
 
     def _adjust_transcript_for_animation_duration(
         self, transcript: str, description: str, animation_duration: float | None = None
@@ -362,7 +206,7 @@ class AudioNarrationService:
 
     def _generate_lmnt_audio(
         self, text: str, scene_name: str, target_duration: float | None = None
-    ) -> Optional[str]:
+    ) -> Optional[tuple[str, list[TranscriptChunk]]]:
         """Generate audio using LMNT TTS API with high-quality voice synthesis and echo prevention"""
 
         print(
@@ -371,9 +215,11 @@ class AudioNarrationService:
 
         try:
             # Generate audio using LMNT async API
-            audio_data = asyncio.run(self._lmnt_synthesize(text))
+            audio_data_maybe = asyncio.run(self._lmnt_synthesize(text))
 
-            if audio_data:
+            if audio_data_maybe:
+                audio_data, transcript_chunks = audio_data_maybe
+
                 # Save raw LMNT audio first
                 raw_audio_path = self.output_dir / f"{scene_name}_raw_lmnt.mp3"
                 with open(raw_audio_path, "wb") as f:
@@ -390,7 +236,10 @@ class AudioNarrationService:
                 if raw_audio_path.exists():
                     raw_audio_path.unlink()
 
-                return final_audio_path
+                if final_audio_path:
+                    return final_audio_path, transcript_chunks
+                else:
+                    return None
             else:
                 print("❌ LMNT TTS failed to generate audio")
                 return self._fallback_system_tts(text, scene_name, target_duration)
@@ -400,17 +249,41 @@ class AudioNarrationService:
             # Try fallback TTS
             return self._fallback_system_tts(text, scene_name, target_duration)
 
-    async def _lmnt_synthesize(self, text: str, voice: str = "leah") -> Optional[bytes]:
+    async def _lmnt_synthesize(
+        self, text: str, voice: str = "leah"
+    ) -> Optional[tuple[bytes, list[TranscriptChunk]]]:
         """Async helper to synthesize speech using LMNT with optimized settings"""
         try:
             print(f"   🗣️  Synthesizing with voice '{voice}' (optimized for clarity)")
+
+            total_bytes = bytes()
+            transcript_chunks = []
+
             async with Speech() as speech:
                 # Use LMNT with basic settings (sample_rate will be handled in post-processing)
-                synthesis = await speech.synthesize(text, voice)
-                print(
-                    f"   ✅ LMNT synthesis complete ({len(synthesis['audio'])} bytes)"
-                )
-                return synthesis["audio"]
+                # synthesis1 = await speech.synthesize(text, voice, return_extras=True)
+                streamer = await speech.synthesize_streaming(voice, return_extras=True)
+                await streamer.append_text(text)
+                await streamer.finish()
+
+                async for synthesis in streamer:
+                    audio: bytes = synthesis["audio"]  # type: ignore
+                    total_bytes += audio
+
+                    # Extract full text and total duration from durations field
+                    if synthesis and "durations" in synthesis:
+                        full_text = ""
+                        total_duration = 0
+                        for chunk in synthesis["durations"]:
+                            full_text += chunk["text"]
+                            total_duration += chunk["duration"]
+
+                        transcript_chunks.append(
+                            TranscriptChunk(text=full_text, duration=total_duration)
+                        )
+
+            print(f"   ✅ LMNT synthesis complete ({len(total_bytes)} bytes)")
+            return total_bytes, transcript_chunks
         except Exception as e:
             print(f"❌ LMNT synthesis error: {e}")
             return None
@@ -508,7 +381,7 @@ class AudioNarrationService:
 
     def _fallback_system_tts(
         self, text: str, scene_name: str, target_duration: float | None = None
-    ) -> Optional[str]:
+    ) -> Optional[tuple[str, list[TranscriptChunk]]]:
         """Fallback to system TTS with normal speech speed"""
         print("🔄 Using system TTS with normal speech speed...")
 
@@ -553,7 +426,10 @@ class AudioNarrationService:
                         temp_mp3.unlink()
 
                     print(f"✅ System TTS audio generated with normal speech")
-                    return final_audio_path
+                    if final_audio_path:
+                        return final_audio_path, []
+                    else:
+                        return None
 
             # If system TTS fails, generate silent audio matched to animation duration
             print("🔇 Generating silent audio matched to animation duration...")
@@ -583,7 +459,7 @@ class AudioNarrationService:
                 f"✅ Generated silent audio placeholder: {audio_path} ({duration:.1f}s)"
             )
             print(f"   💡 Text: {text[:100]}...")
-            return str(audio_path)
+            return str(audio_path), []
 
         except Exception as e:
             print(f"❌ Fallback audio generation failed: {e}")
@@ -763,45 +639,6 @@ class AudioNarrationService:
             return str(final_path)
 
 
-# Convenience functions
-# def generate_narration_for_animation(
-#     animation: AnsciAnimation,
-#     video_paths: List[str] | None = None,
-#     output_dir: str | None = None,
-# ) -> List[str]:
-#     """
-#     Convenience function to generate narrations for an animation
-
-#     Args:
-#         animation: Animation to generate narrations for
-#         video_paths: Optional video paths to match duration
-#         output_dir: Output directory for audio files
-
-#     Returns:
-#         List of audio file paths
-#     """
-#     service = AudioNarrationService(output_dir)
-#     return service.generate_narrations_for_animation(animation, video_paths)
-
-
-# def create_audiovisual_animation(
-#     animation: AnsciAnimation, video_paths: List[str], output_dir: str = None
-# ) -> List[str]:
-#     """
-#     Convenience function to create complete audiovisual animations
-
-#     Args:
-#         animation: Animation containing scene blocks
-#         video_paths: List of video file paths
-#         output_dir: Output directory for merged files
-
-#     Returns:
-#         List of merged audiovisual file paths
-#     """
-#     service = AudioNarrationService(output_dir)
-#     return service.create_complete_audiovisual_animation(animation, video_paths)
-
-
 def create_audiovisual_animation_with_embedded_audio(
     animation: AnsciAnimation, output_dir: str
 ) -> AnsciAnimation:
@@ -833,6 +670,8 @@ def create_audiovisual_animation_with_embedded_audio(
         )
 
         if audio_path:
+            audio_path, transcript_chunks = audio_path
+
             # Create scene block with embedded audio
             audiovisual_block = create_audiovisual_scene_block(
                 scene_block, audio_path, scene_name

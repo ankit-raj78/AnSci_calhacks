@@ -137,22 +137,6 @@ class AnimationRenderer:
         )
         return video_paths
 
-    def render_scene_block(
-        self, scene_block: AnsciSceneBlock, scene_name: str, quality: str = "high"
-    ) -> Optional[str]:
-        """
-        Render a single scene block to video
-
-        Args:
-            scene_block: Individual scene block to render
-            scene_name: Name for the scene (used in file naming)
-            quality: Rendering quality
-
-        Returns:
-            Path to rendered video file, or None if rendering failed
-        """
-        return self._render_scene_block(scene_block, scene_name, quality)
-
     def combine_videos(
         self, video_paths: List[str], output_name: str = "complete_animation"
     ) -> str:
@@ -331,60 +315,6 @@ class AnimationPresets:
 '''
             return imports + "\n" + manim_code
         return manim_code
-
-
-# # Convenience functions for easy use with quality assurance
-# def render_animation(
-#     animation: AnsciAnimation,
-#     output_dir: str = None,
-#     quality: str = "high",
-#     enable_validation: bool = True,
-# ) -> List[str]:
-#     """
-#     Convenience function to render an animation with quality assurance
-
-#     Args:
-#         animation: AnsciAnimation object to render
-#         output_dir: Directory for output files
-#         quality: Rendering quality
-#         enable_validation: Whether to enable quality validation
-
-#     Returns:
-#         List of paths to rendered video files
-#     """
-#     renderer = AnimationRenderer(output_dir, enable_validation)
-#     return renderer.render_animation(animation, quality)
-
-
-# def render_complete_animation(
-#     animation: AnsciAnimation,
-#     output_name: str = "complete_animation",
-#     output_dir: str = None,
-#     enable_validation: bool = True,
-# ) -> str:
-#     """
-#     Render complete animation and combine into single video with quality assurance
-
-#     Args:
-#         animation: AnsciAnimation object to render
-#         output_name: Name for the final combined video
-#         output_dir: Directory for output files
-#         enable_validation: Whether to enable quality validation
-
-#     Returns:
-#         Path to combined video file
-#     """
-#     renderer = AnimationRenderer(output_dir, enable_validation)
-
-#     # Render all scenes with validation
-#     video_paths = renderer.render_animation(animation, quality="high")
-
-#     # Combine into complete video
-#     if video_paths:
-#         complete_video = renderer.combine_videos(video_paths, output_name)
-#         return complete_video
-
-#     return ""
 
 
 def render_audiovisual_animation_embedded(
