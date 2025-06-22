@@ -12,6 +12,7 @@ from typing import List, Optional
 from functools import wraps
 
 from .models import AnsciAnimation, AnsciSceneBlock
+from .audio import create_audiovisual_animation_with_embedded_audio
 
 # Quality Assurance for Rendering
 try:
@@ -86,7 +87,7 @@ def validate_animation(animation: AnsciAnimation) -> bool:
 class AnimationRenderer:
     """Service responsible for rendering animations to video files with quality assurance"""
 
-    def __init__(self, output_dir: str = None, enable_validation: bool = True):
+    def __init__(self, output_dir: str, enable_validation: bool = True):
         self.output_dir = (
             Path(output_dir) if output_dir else Path("generated_animations")
         )
@@ -332,63 +333,63 @@ class AnimationPresets:
         return manim_code
 
 
-# Convenience functions for easy use with quality assurance
-def render_animation(
-    animation: AnsciAnimation,
-    output_dir: str = None,
-    quality: str = "high",
-    enable_validation: bool = True,
-) -> List[str]:
-    """
-    Convenience function to render an animation with quality assurance
+# # Convenience functions for easy use with quality assurance
+# def render_animation(
+#     animation: AnsciAnimation,
+#     output_dir: str = None,
+#     quality: str = "high",
+#     enable_validation: bool = True,
+# ) -> List[str]:
+#     """
+#     Convenience function to render an animation with quality assurance
 
-    Args:
-        animation: AnsciAnimation object to render
-        output_dir: Directory for output files
-        quality: Rendering quality
-        enable_validation: Whether to enable quality validation
+#     Args:
+#         animation: AnsciAnimation object to render
+#         output_dir: Directory for output files
+#         quality: Rendering quality
+#         enable_validation: Whether to enable quality validation
 
-    Returns:
-        List of paths to rendered video files
-    """
-    renderer = AnimationRenderer(output_dir, enable_validation)
-    return renderer.render_animation(animation, quality)
+#     Returns:
+#         List of paths to rendered video files
+#     """
+#     renderer = AnimationRenderer(output_dir, enable_validation)
+#     return renderer.render_animation(animation, quality)
 
 
-def render_complete_animation(
-    animation: AnsciAnimation,
-    output_name: str = "complete_animation",
-    output_dir: str = None,
-    enable_validation: bool = True,
-) -> str:
-    """
-    Render complete animation and combine into single video with quality assurance
+# def render_complete_animation(
+#     animation: AnsciAnimation,
+#     output_name: str = "complete_animation",
+#     output_dir: str = None,
+#     enable_validation: bool = True,
+# ) -> str:
+#     """
+#     Render complete animation and combine into single video with quality assurance
 
-    Args:
-        animation: AnsciAnimation object to render
-        output_name: Name for the final combined video
-        output_dir: Directory for output files
-        enable_validation: Whether to enable quality validation
+#     Args:
+#         animation: AnsciAnimation object to render
+#         output_name: Name for the final combined video
+#         output_dir: Directory for output files
+#         enable_validation: Whether to enable quality validation
 
-    Returns:
-        Path to combined video file
-    """
-    renderer = AnimationRenderer(output_dir, enable_validation)
+#     Returns:
+#         Path to combined video file
+#     """
+#     renderer = AnimationRenderer(output_dir, enable_validation)
 
-    # Render all scenes with validation
-    video_paths = renderer.render_animation(animation, quality="high")
+#     # Render all scenes with validation
+#     video_paths = renderer.render_animation(animation, quality="high")
 
-    # Combine into complete video
-    if video_paths:
-        complete_video = renderer.combine_videos(video_paths, output_name)
-        return complete_video
+#     # Combine into complete video
+#     if video_paths:
+#         complete_video = renderer.combine_videos(video_paths, output_name)
+#         return complete_video
 
-    return ""
+#     return ""
 
 
 def render_audiovisual_animation_embedded(
     animation: AnsciAnimation,
-    output_dir: str = None,
+    output_dir: str,
     quality: str = "high",
     enable_validation: bool = True,
 ) -> List[str]:
@@ -405,7 +406,6 @@ def render_audiovisual_animation_embedded(
     Returns:
         List of paths to audiovisual video files
     """
-    from .audio import create_audiovisual_animation_with_embedded_audio
 
     if enable_validation and not validate_animation(animation):
         print("❌ Animation validation failed")

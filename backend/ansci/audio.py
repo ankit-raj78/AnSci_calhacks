@@ -78,7 +78,7 @@ class AudioNarrationService:
             return None
 
     def generate_narrations_for_animation(
-        self, animation: AnsciAnimation, video_paths: List[str] = None
+        self, animation: AnsciAnimation, video_paths: List[str]
     ) -> List[str]:
         """
         Generate synchronized narrations for all scenes in an animation
@@ -111,7 +111,7 @@ class AudioNarrationService:
         return audio_paths
 
     def merge_audio_with_video(
-        self, video_path: str, audio_path: str, output_name: str = None
+        self, video_path: str, audio_path: str, output_name: str
     ) -> str:
         """
         Merge audio narration with video animation - prioritizing video duration
@@ -764,46 +764,46 @@ class AudioNarrationService:
 
 
 # Convenience functions
-def generate_narration_for_animation(
-    animation: AnsciAnimation,
-    video_paths: List[str] | None = None,
-    output_dir: str | None = None,
-) -> List[str]:
-    """
-    Convenience function to generate narrations for an animation
+# def generate_narration_for_animation(
+#     animation: AnsciAnimation,
+#     video_paths: List[str] | None = None,
+#     output_dir: str | None = None,
+# ) -> List[str]:
+#     """
+#     Convenience function to generate narrations for an animation
 
-    Args:
-        animation: Animation to generate narrations for
-        video_paths: Optional video paths to match duration
-        output_dir: Output directory for audio files
+#     Args:
+#         animation: Animation to generate narrations for
+#         video_paths: Optional video paths to match duration
+#         output_dir: Output directory for audio files
 
-    Returns:
-        List of audio file paths
-    """
-    service = AudioNarrationService(output_dir)
-    return service.generate_narrations_for_animation(animation, video_paths)
+#     Returns:
+#         List of audio file paths
+#     """
+#     service = AudioNarrationService(output_dir)
+#     return service.generate_narrations_for_animation(animation, video_paths)
 
 
-def create_audiovisual_animation(
-    animation: AnsciAnimation, video_paths: List[str], output_dir: str = None
-) -> List[str]:
-    """
-    Convenience function to create complete audiovisual animations
+# def create_audiovisual_animation(
+#     animation: AnsciAnimation, video_paths: List[str], output_dir: str = None
+# ) -> List[str]:
+#     """
+#     Convenience function to create complete audiovisual animations
 
-    Args:
-        animation: Animation containing scene blocks
-        video_paths: List of video file paths
-        output_dir: Output directory for merged files
+#     Args:
+#         animation: Animation containing scene blocks
+#         video_paths: List of video file paths
+#         output_dir: Output directory for merged files
 
-    Returns:
-        List of merged audiovisual file paths
-    """
-    service = AudioNarrationService(output_dir)
-    return service.create_complete_audiovisual_animation(animation, video_paths)
+#     Returns:
+#         List of merged audiovisual file paths
+#     """
+#     service = AudioNarrationService(output_dir)
+#     return service.create_complete_audiovisual_animation(animation, video_paths)
 
 
 def create_audiovisual_animation_with_embedded_audio(
-    animation: AnsciAnimation, output_dir: str = None
+    animation: AnsciAnimation, output_dir: str
 ) -> AnsciAnimation:
     """
     Create audiovisual animation by embedding audio directly in Manim code

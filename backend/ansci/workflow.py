@@ -7,6 +7,7 @@ from anthropic.types import MessageParam
 from .outline import generate_outline
 from .animate import create_ansci_animation
 from .models import AnsciAnimation
+from .render import render_audiovisual_animation_embedded
 
 
 def create_animation(
@@ -104,7 +105,6 @@ def create_animation(
     # Step 4: Render with embedded audio
     print("\n🎙️ Step 4: Rendering with LMNT audio integration...")
     try:
-        from .render import render_audiovisual_animation_embedded
 
         # Create output directory
         output_path = Path(filename)
