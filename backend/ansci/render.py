@@ -169,7 +169,7 @@ class AnimationRenderer:
         # Use ffmpeg to concatenate videos
         concat_file = self.output_dir / "concat_list.txt"
 
-        with open(concat_file, "w") as f:
+        with open(concat_file, "w", encoding="utf-8") as f:
             for video_path in video_paths:
                 f.write(f"file '{video_path}'\n")
 
@@ -207,7 +207,7 @@ class AnimationRenderer:
         # Add proper imports to the generated code
         enhanced_code = self._add_imports_to_manim_code(scene_block.manim_code)
 
-        with open(scene_file, "w") as f:
+        with open(scene_file, "w", encoding="utf-8") as f:
             f.write(enhanced_code)
 
         # Quality flags

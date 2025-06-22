@@ -15,6 +15,7 @@ from .verify import (
     validate_generated_manim_code,
     ValidationResult,
     print_validation_summary,
+    generate_regeneration_feedback,
 )
 
 from manim import Text, WHITE
@@ -209,8 +210,8 @@ def create_ansci_animation(
         print(f"🔍 Validating Scene {i+1} Manim code...")
         validation_result = validate_generated_manim_code(manim_code)
 
-        # Handle validation failures with retry logic
-        max_retries = 2
+        # Handle validation failures with enhanced retry logic
+        max_retries = 3  # Increased from 2 to 3
         retry_count = 0
 
         while not validation_result.is_valid and retry_count < max_retries:
@@ -218,14 +219,20 @@ def create_ansci_animation(
             print(
                 f"❌ Scene {i+1} validation failed (attempt {retry_count}/{max_retries}):"
             )
+            print(f"   Error type: {validation_result.error_type or 'unknown'}")
             for error in validation_result.errors:
                 print(f"   - {error}")
 
             if retry_count < max_retries:
-                print(f"🔄 Regenerating Scene {i+1} with improved prompts...")
+                print(f"🔄 Regenerating Scene {i+1} with enhanced error feedback...")
+
+                # Generate detailed feedback for regeneration
+                feedback = generate_regeneration_feedback(validation_result)
+                print(f"📋 Regeneration feedback for Scene {i+1}:")
+                print(feedback[:500] + "..." if len(feedback) > 500 else feedback)
 
                 # Regenerate with more specific error-aware prompts
-                manim_code = _generate_manim_code_with_validation_fixes(
+                manim_code = _generate_manim_code_with_enhanced_fixes(
                     content=outline_block.text,
                     scene_name=f"Scene{i+1}",
                     description=description,
@@ -236,7 +243,9 @@ def create_ansci_animation(
                         "total_scenes": len(outline.blocks),
                         "user_context": user_context,
                     },
-                    previous_errors=validation_result.errors,
+                    error_instructions="",
+                    validation_result=validation_result,
+                    attempt_number=retry_count,
                 )
 
                 # Re-validate the regenerated code
@@ -251,8 +260,16 @@ def create_ansci_animation(
                     print(f"   - {warning}")
         else:
             print(f"❌ Scene {i+1} validation failed after {max_retries} attempts:")
+            print(f"   Final error type: {validation_result.error_type or 'unknown'}")
             for error in validation_result.errors:
                 print(f"   - {error}")
+            if (
+                hasattr(validation_result, "suggestions")
+                and validation_result.suggestions
+            ):
+                print(f"   💡 Suggestions:")
+                for suggestion in validation_result.suggestions[:3]:
+                    print(f"     - {suggestion}")
             print(f"⚠️  Proceeding with Scene {i+1} despite validation errors...")
 
         scene_block = AnsciSceneBlock(
@@ -868,43 +885,106 @@ def create_audiovisual_scene_block(
     )
 
 
-def _generate_manim_code_with_validation_fixes(
+def _generate_manim_code_with_enhanced_fixes(
     content: str,
     scene_name: str,
     description: str,
     context: dict,
-    previous_errors: List[str],
+    error_instructions: str,
+    validation_result: ValidationResult,
+    attempt_number: int,
 ) -> str:
     """Generate Manim code with specific fixes for validation errors"""
 
     # Build error-specific instructions
     error_instructions = ""
-    if previous_errors:
-        error_instructions = "\n\nPREVIOUS VALIDATION ERRORS TO FIX:\n"
-        for error in previous_errors:
+    if validation_result.errors:
+        error_instructions = (
+            f"\n\nPREVIOUS VALIDATION ERRORS TO FIX (Attempt {attempt_number}):\n"
+        )
+        error_instructions += (
+            f"Error type: {validation_result.error_type or 'unknown'}\n"
+        )
+        for error in validation_result.errors:
             error_instructions += f"- {error}\n"
 
         error_instructions += "\nSPECIFIC FIXES REQUIRED:\n"
 
+        # Add specific fixes based on error type
+        if validation_result.error_type == "syntax_error":
+            error_instructions += "- CRITICAL: Fix all syntax errors - check parentheses, brackets, quotes\n"
+            error_instructions += "- Verify proper indentation throughout the code\n"
+            error_instructions += "- Ensure all statements end properly\n"
+            error_instructions += (
+                "- Check for missing colons after function/class definitions\n"
+            )
+
+        elif validation_result.error_type == "undefined_variables":
+            error_instructions += "- CRITICAL: Define all variables before using them\n"
+            error_instructions += "- Import required modules and classes\n"
+            error_instructions += (
+                "- Use proper Manim object names (Text, Circle, etc.)\n"
+            )
+            error_instructions += "- Check spelling of variable and function names\n"
+
+        elif validation_result.error_type == "type_error":
+            error_instructions += (
+                "- CRITICAL: Check function argument types and order\n"
+            )
+            error_instructions += "- Ensure objects have required methods/attributes\n"
+            error_instructions += "- Verify variable types before operations\n"
+            error_instructions += "- Use proper Manim function signatures\n"
+
+        elif validation_result.error_type == "runtime_error":
+            error_instructions += (
+                "- CRITICAL: Check for infinite loops or long operations\n"
+            )
+            error_instructions += (
+                "- Verify object methods exist and are called correctly\n"
+            )
+            error_instructions += "- Ensure proper error handling\n"
+            error_instructions += "- Check for division by zero or invalid operations\n"
+
+        elif validation_result.error_type == "import_error":
+            error_instructions += (
+                "- CRITICAL: Use only basic Manim imports: 'from manim import *'\n"
+            )
+            error_instructions += (
+                "- Avoid external libraries like librosa, scipy, etc.\n"
+            )
+            error_instructions += (
+                "- Include: 'import numpy as np', 'from functools import wraps'\n"
+            )
+
+        elif validation_result.error_type == "manim_structure_error":
+            error_instructions += (
+                "- CRITICAL: Define a class that inherits from Scene\n"
+            )
+            error_instructions += "- Include a construct(self) method\n"
+            error_instructions += "- Use proper Manim animation syntax\n"
+            error_instructions += "- Follow Manim best practices for scene structure\n"
+
         # Add specific fixes based on common error patterns
-        if any("Syntax Error" in error for error in previous_errors):
+        if any("Syntax Error" in error for error in validation_result.errors):
             error_instructions += (
                 "- Ensure all parentheses, brackets, and quotes are properly matched\n"
             )
             error_instructions += "- Check for proper indentation throughout the code\n"
             error_instructions += "- Verify all statements end properly\n"
 
-        if any("Missing Scene class" in error for error in previous_errors):
+        if any("Missing Scene class" in error for error in validation_result.errors):
             error_instructions += "- MUST define a class that inherits from Scene\n"
             error_instructions += "- Example: class Scene1(Scene):\n"
 
-        if any("Missing construct() method" in error for error in previous_errors):
+        if any(
+            "Missing construct() method" in error for error in validation_result.errors
+        ):
             error_instructions += (
                 "- MUST include a construct(self) method in the Scene class\n"
             )
             error_instructions += "- Example: def construct(self):\n"
 
-        if any("Import error" in error for error in previous_errors):
+        if any("Import error" in error for error in validation_result.errors):
             error_instructions += (
                 "- Use only basic Manim imports: from manim import *\n"
             )
@@ -915,26 +995,52 @@ def _generate_manim_code_with_validation_fixes(
                 "- Include: import numpy as np, from functools import wraps\n"
             )
 
+        # Add suggestions from validation result
+        if hasattr(validation_result, "suggestions") and validation_result.suggestions:
+            error_instructions += "\nVALIDATION SUGGESTIONS:\n"
+            for suggestion in validation_result.suggestions:
+                error_instructions += f"- {suggestion}\n"
+
+        # Add attempt-specific guidance
+        if attempt_number == 2:
+            error_instructions += "\nSECOND ATTEMPT GUIDANCE:\n"
+            error_instructions += "- Focus on the most critical errors first\n"
+            error_instructions += "- Simplify the code if necessary\n"
+            error_instructions += "- Use basic Manim patterns only\n"
+        elif attempt_number == 3:
+            error_instructions += "\nFINAL ATTEMPT GUIDANCE:\n"
+            error_instructions += "- Use the most basic, proven Manim template\n"
+            error_instructions += "- Minimize complexity to ensure it works\n"
+            error_instructions += "- Focus on core functionality only\n"
+
     # Try to use Anthropic SDK for intelligent generation with error fixes
     if ANTHROPIC_CLIENT:
         try:
-            return _generate_manim_code_with_anthropic_and_fixes(
-                content, scene_name, description, context, error_instructions
+            return _generate_manim_code_with_anthropic_and_enhanced_fixes(
+                content,
+                scene_name,
+                description,
+                context,
+                error_instructions,
+                validation_result,
+                attempt_number,
             )
         except Exception as e:
-            print(f"⚠️  Anthropic generation with fixes failed: {e}")
+            print(f"⚠️  Anthropic generation with enhanced fixes failed: {e}")
             print("🔄 Falling back to template-based generation...")
 
     # Fallback to template-based generation
     return _generate_manim_code_template(content, scene_name, description)
 
 
-def _generate_manim_code_with_anthropic_and_fixes(
+def _generate_manim_code_with_anthropic_and_enhanced_fixes(
     content: str,
     scene_name: str,
     description: str,
     context: dict,
     error_instructions: str,
+    validation_result: ValidationResult,
+    attempt_number: int,
 ) -> str:
     """Generate Manim code using Anthropic SDK with specific error fixes"""
 
@@ -958,6 +1064,10 @@ SCENE NAME: {scene_name}
 DESCRIPTION: {description}
 {context_info}
 {error_instructions}
+
+ATTEMPT NUMBER: {attempt_number}/3
+ERROR TYPE: {validation_result.error_type or 'unknown'}
+TOTAL ERRORS: {len(validation_result.errors)}
 
 CRITICAL REQUIREMENTS (MUST FOLLOW EXACTLY):
 1. Create a complete Scene class named "{scene_name}" that inherits from Scene
@@ -985,6 +1095,13 @@ CRITICAL REQUIREMENTS (MUST FOLLOW EXACTLY):
 23. Use multiple colors, highlight important parts, and create visual hierarchy
 24. Add explanatory text boxes, labels, and annotations for clarity
 25. Make each animation comprehensive and self-contained for maximum educational value
+
+ATTEMPT-SPECIFIC INSTRUCTIONS:
+- This is attempt {attempt_number} of 3 - focus on fixing the specific errors identified
+- Pay special attention to the error type: {validation_result.error_type or 'unknown'}
+- If this is attempt 3, prioritize simplicity and correctness over complexity
+- Ensure all syntax is correct and all variables are properly defined
+- Double-check all function calls and their arguments
 
 TEMPLATE STRUCTURE:
 ```python
@@ -1031,13 +1148,16 @@ class {scene_name}(Scene):
         pass
 ```
 
-Generate ONLY the Python code for the complete Manim scene. Make it educational, visually appealing, and focused on the content provided. Ensure it passes all validation checks.
+Generate ONLY the Python code for the complete Manim scene. Make it educational, visually appealing, and focused on the content provided. Ensure it passes all validation checks and fixes the specific errors identified.
 """
+
+    # Adjust temperature based on attempt number - more conservative on later attempts
+    temperature = 0.3 if attempt_number == 1 else 0.2 if attempt_number == 2 else 0.1
 
     response = ANTHROPIC_CLIENT.messages.create(
         model="claude-sonnet-4-20250514",  # Use Sonnet 4 for highest quality Manim code generation
         max_tokens=8192,  # Maximum tokens for Sonnet 4 - allows for very detailed animations
-        temperature=0.2,  # Lower temperature for more consistent, error-free code
+        temperature=temperature,  # Lower temperature for more consistent, error-free code
         stream=True,  # Enable streaming for long requests
         messages=[{"role": "user", "content": prompt}],
     )
@@ -1060,5 +1180,7 @@ Generate ONLY the Python code for the complete Manim scene. Make it educational,
         end = generated_code.find("```", start)
         generated_code = generated_code[start:end].strip()
 
-    print(f"✅ Regenerated Manim code with validation fixes for {scene_name}")
+    print(
+        f"✅ Regenerated Manim code with enhanced fixes for {scene_name} (attempt {attempt_number})"
+    )
     return generated_code
