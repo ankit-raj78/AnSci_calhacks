@@ -1,5 +1,5 @@
 from typing import Generator
-from .types import AnsciOutline, AnsciSceneBlock
+from .models import AnsciOutline, AnsciSceneBlock
 
 
 def create_ansci_animation(
