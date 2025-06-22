@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field
 class AnsciOutlineBlock(BaseModel):
     """Single outline block - a piece of coherent information that should be animated together"""
 
-    content: str = Field(description="The content of the outline block")
+    block_title: str = Field(description="The title of the outline block")
+    text: str = Field(description="The content of the outline block")
 
 
 class AnsciOutline(BaseModel):

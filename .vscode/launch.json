@@ -18,7 +18,7 @@
             "program": "${workspaceFolder}/backend/main.py",
             "args": [
                 "--paper",
-                "C:\\Users\\aamir\\Downloads\\AnSci_calhacks\\visualAMM.pdf",
+                "${workspaceFolder}/tmp/visualAMM.pdf",
                 "--output",
                 "${workspaceFolder}/backend/test.mp4",
             ],
