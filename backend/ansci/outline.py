@@ -36,7 +36,7 @@ def generate_outline(history: list[MessageParam]) -> tuple[str, AnsciOutline | N
     text_content = ""
     tool_call = None
     tool_input_json = ""
-    
+
     for chunk in response:
         if chunk.type == "content_block_start":
             if chunk.content_block.type == "text":
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     pdf_url = "https://www.cs.cmu.edu/~conitzer/visualAMM.pdf"
     pdf_data = base64.standard_b64encode(httpx.get(pdf_url).content).decode("utf-8")
 
-    history = [
+    history: list[MessageParam] = [
         {
             "role": "user",
             "content": [

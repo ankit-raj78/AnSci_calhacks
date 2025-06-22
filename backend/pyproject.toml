@@ -8,6 +8,7 @@ dependencies = [
     "anthropic>=0.54.0",
     "dotenv>=0.9.9",
     "langgraph>=0.4.8",
+    "lmnt>=1.2.0",
     "manim>=0.19.0",
     "numpy>=2.3.1",
     "pydantic (>=2.11.7,<3.0.0)",
