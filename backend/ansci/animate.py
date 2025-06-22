@@ -7,73 +7,56 @@ Uses Anthropic SDK for intelligent Manim code generation
 
 import os
 import anthropic
-from typing import Generator, List, Dict
+from anthropic.types import MessageParam
+from typing import Generator, List
 from functools import wraps
 from .models import AnsciOutline, AnsciSceneBlock, AnsciAnimation
 
+from manim import Text, WHITE
+
 # Load environment variables
-try:
-    import dotenv
-    dotenv.load_dotenv()
-except ImportError:
-    pass
+import dotenv
+
+dotenv.load_dotenv()
 
 # Initialize Anthropic client
-ANTHROPIC_CLIENT = None
-try:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if api_key:
-        ANTHROPIC_CLIENT = anthropic.Anthropic(api_key=api_key)
-        print("✅ Anthropic SDK initialized successfully")
-    else:
-        print("⚠️  ANTHROPIC_API_KEY not found in environment variables")
-except Exception as e:
-    print(f"⚠️  Failed to initialize Anthropic SDK: {e}")
+api_key = os.getenv("ANTHROPIC_API_KEY")
+ANTHROPIC_CLIENT = anthropic.Anthropic(api_key=api_key)
 
-# Quality Assurance Components
-try:
-    from manim import *
-    import numpy as np
-    MANIM_AVAILABLE = True
-except ImportError:
-    MANIM_AVAILABLE = False
-    print("Warning: Manim not available. Using fallback implementations.")
+from manim import *
 
 
 class LayoutManager:
     """Advanced layout management for Manim animations"""
-    
+
     # Screen boundaries with safe margins
     SAFE_MARGIN = 0.5
     SCREEN_WIDTH = 14.22  # Standard Manim config
-    SCREEN_HEIGHT = 8.0   # Standard Manim config
-    
+    SCREEN_HEIGHT = 8.0  # Standard Manim config
+
     # Safe boundaries
-    LEFT_BOUND = -SCREEN_WIDTH/2 + SAFE_MARGIN
-    RIGHT_BOUND = SCREEN_WIDTH/2 - SAFE_MARGIN
-    TOP_BOUND = SCREEN_HEIGHT/2 - SAFE_MARGIN
-    BOTTOM_BOUND = -SCREEN_HEIGHT/2 + SAFE_MARGIN
-    
+    LEFT_BOUND = -SCREEN_WIDTH / 2 + SAFE_MARGIN
+    RIGHT_BOUND = SCREEN_WIDTH / 2 - SAFE_MARGIN
+    TOP_BOUND = SCREEN_HEIGHT / 2 - SAFE_MARGIN
+    BOTTOM_BOUND = -SCREEN_HEIGHT / 2 + SAFE_MARGIN
+
     @classmethod
     def safe_position(cls, mobject, target_position):
         """
         Ensure a mobject is positioned within safe screen boundaries
-        
+
         Args:
             mobject: The Manim object to position
             target_position: [x, y, z] coordinates
-            
+
         Returns:
             Safe position as array or list
         """
-        if not MANIM_AVAILABLE:
-            return target_position
-            
         x, y, z = target_position
-        
+
         # Get object dimensions - with fallbacks
         try:
-            if hasattr(mobject, 'get_width') and hasattr(mobject, 'get_height'):
+            if hasattr(mobject, "get_width") and hasattr(mobject, "get_height"):
                 obj_width = mobject.get_width()
                 obj_height = mobject.get_height()
             else:
@@ -82,69 +65,61 @@ class LayoutManager:
         except:
             obj_width = 1.0
             obj_height = 0.5
-        
+
         # Adjust x coordinate
         half_width = obj_width / 2
         if x - half_width < cls.LEFT_BOUND:
             x = cls.LEFT_BOUND + half_width
         elif x + half_width > cls.RIGHT_BOUND:
             x = cls.RIGHT_BOUND - half_width
-        
+
         # Adjust y coordinate
         half_height = obj_height / 2
         if y + half_height > cls.TOP_BOUND:
             y = cls.TOP_BOUND - half_height
         elif y - half_height < cls.BOTTOM_BOUND:
             y = cls.BOTTOM_BOUND + half_height
-        
-        if MANIM_AVAILABLE:
-            import numpy as np
-            return np.array([x, y, z])
-        else:
-            return [x, y, z]
+
+        return np.array([x, y, z])
 
 
 class AnimationPresets:
     """Predefined quality settings for consistent animations"""
-    
+
     # Timing presets
     FAST = 0.5
     NORMAL = 1.0
     SLOW = 1.5
-    
+
     # Font size presets
     TITLE_SIZE = 28
     SUBTITLE_SIZE = 22
     BODY_SIZE = 14
-    
+
     @classmethod
     def get_title_text(cls, text, position=None):
         """Create a title with consistent styling"""
-        if not MANIM_AVAILABLE:
-            return {"text": text, "size": cls.TITLE_SIZE, "position": position}
-        
+
         from manim import Text, BLUE
+
         text_obj = Text(text, font_size=cls.TITLE_SIZE, color=BLUE)
-        
+
         if position is not None:
             safe_pos = LayoutManager.safe_position(text_obj, position)
             text_obj.move_to(safe_pos)
-        
+
         return text_obj
-    
+
     @classmethod
     def get_body_text(cls, text, position=None):
         """Create body text with consistent styling"""
-        if not MANIM_AVAILABLE:
-            return {"text": text, "size": cls.BODY_SIZE, "position": position}
-        
-        from manim import Text, WHITE
+
         text_obj = Text(text, font_size=cls.BODY_SIZE, color=WHITE)
-        
+
         if position is not None:
             safe_pos = LayoutManager.safe_position(text_obj, position)
             text_obj.move_to(safe_pos)
-        
+
         return text_obj
 
 
@@ -152,67 +127,64 @@ def validate_scene(scene_construct_method):
     """
     Decorator to add quality validation to scene construct methods
     """
-    if not MANIM_AVAILABLE:
-        return scene_construct_method
-        
+
     @wraps(scene_construct_method)
     def wrapper(self, *args, **kwargs):
         # Run the original construct method
         result = scene_construct_method(self, *args, **kwargs)
-        
+
         # Perform quality checks
-        run_quality_check(self)
-        
+        _run_quality_check(self)
+
         return result
-    
+
     return wrapper
 
 
-def run_quality_check(scene):
+def _run_quality_check(scene):
     """
     Run comprehensive quality check on a scene
     """
-    if not MANIM_AVAILABLE:
-        print("✅ Quality check skipped (Manim not available)")
-        return True
-    
-    if not hasattr(scene, 'mobjects'):
+
+    if not hasattr(scene, "mobjects"):
         print("✅ Quality check: No objects to validate")
         return True
-    
+
     print(f"✅ Quality check: Validated {len(scene.mobjects)} objects")
     return True
 
 
 # Main Animation Creation Interface
 def create_ansci_animation(
-    history: list[dict],
+    history: list[MessageParam],
     outline: AnsciOutline,
 ) -> Generator[AnsciSceneBlock, None, None]:
     """
     Create animation scene blocks from chat history and outline using Anthropic SDK
-    
+
     Args:
         history: Chat history containing paper content and user messages
         outline: Structured outline for the animation
-        
+
     Yields:
         AnsciSceneBlock: Individual scene blocks for the animation
     """
     print(f"🎬 Creating animation from outline: '{outline.title}'")
     print(f"📋 Processing {len(outline.blocks)} outline blocks")
     print(f"💬 Using context from {len(history)} history messages")
-    
+
     # Extract context from history for better generation
     user_context = _extract_context_from_history(history)
-    
+
     for i, outline_block in enumerate(outline.blocks):
         print(f"🎬 Generating Scene {i+1}/{len(outline.blocks)}...")
-        
+
         # Generate scene components from outline with context
-        transcript = _generate_transcript_from_outline(outline_block.text, i, user_context)
+        transcript = _generate_transcript_from_outline(
+            outline_block.text, i, user_context
+        )
         description = _generate_scene_description(outline_block.text, i, user_context)
-        
+
         # Generate Manim code using Anthropic with full context
         manim_code = _generate_manim_code_from_content(
             content=outline_block.text,
@@ -223,33 +195,31 @@ def create_ansci_animation(
                 "outline_title": outline.title,
                 "scene_index": i,
                 "total_scenes": len(outline.blocks),
-                "user_context": user_context
-            }
+                "user_context": user_context,
+            },
         )
-        
+
         scene_block = AnsciSceneBlock(
-            transcript=transcript,
-            description=description,
-            manim_code=manim_code
+            transcript=transcript, description=description, manim_code=manim_code
         )
-        
+
         print(f"✅ Generated Scene {i+1}: {description[:50]}...")
         yield scene_block
 
 
-def _extract_context_from_history(history: list[dict]) -> dict:
+def _extract_context_from_history(history: list[MessageParam]) -> dict:
     """Extract relevant context from chat history for better animation generation"""
     context = {
         "user_preferences": [],
         "key_topics": [],
         "focus_areas": [],
-        "questions": []
+        "questions": [],
     }
-    
+
     for message in history:
         content = message.get("content", "")
         role = message.get("role", "")
-        
+
         if role == "user":
             # Handle content as list (document + text) or string
             text_content = ""
@@ -259,9 +229,9 @@ def _extract_context_from_history(history: list[dict]) -> dict:
                         text_content += item.get("text", "") + " "
             elif isinstance(content, str):
                 text_content = content
-            
+
             text_content = text_content.lower()
-            
+
             # Extract user preferences and questions
             if "explain" in text_content or "show" in text_content:
                 context["user_preferences"].append(text_content)
@@ -269,49 +239,62 @@ def _extract_context_from_history(history: list[dict]) -> dict:
                 context["questions"].append(text_content)
             if "focus" in text_content or "emphasize" in text_content:
                 context["focus_areas"].append(text_content)
-        
+
         # Extract key topics mentioned
-        key_terms = ["attention", "transformer", "rnn", "lstm", "parallel", "sequential", "bert", "gpt"]
+        key_terms = [
+            "attention",
+            "transformer",
+            "rnn",
+            "lstm",
+            "parallel",
+            "sequential",
+            "bert",
+            "gpt",
+        ]
+
+        # Convert content to string for searching
+        content_str = ""
+        if isinstance(content, str):
+            content_str = content
+        elif isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    content_str += item.get("text", "") + " "
+                elif isinstance(item, str):
+                    content_str += item + " "
+
+        content_str = content_str.lower()
+
         for term in key_terms:
-            if term in content:
+            if term in content_str:
                 context["key_topics"].append(term)
-    
+
     return context
 
 
-def create_scene_block(transcript: str, description: str, manim_code: str) -> AnsciSceneBlock:
-    """Create a scene block with validation"""
-    return AnsciSceneBlock(
-        transcript=transcript,
-        description=description,
-        manim_code=manim_code
-    )
-
-
-def create_animation_from_blocks(scene_blocks: List[AnsciSceneBlock]) -> AnsciAnimation:
-    """Create an animation from scene blocks"""
-    return AnsciAnimation(blocks=scene_blocks)
-
-
-def create_complete_animation(outline: AnsciOutline, history: list[dict] = None) -> AnsciAnimation:
+def create_complete_animation(
+    outline: AnsciOutline, history: list[MessageParam]
+) -> AnsciAnimation:
     """
     Create a complete animation from an outline
-    
+
     Args:
         outline: Structured outline for the animation
         history: Optional chat history for context
-        
+
     Returns:
         AnsciAnimation: Complete animation ready for rendering
     """
-    scene_blocks = list(create_ansci_animation(history or [], outline))
+    scene_blocks = list(create_ansci_animation(history=history, outline=outline))
     return AnsciAnimation(blocks=scene_blocks)
 
 
 # Helper functions for content generation
-def _generate_transcript_from_outline(content: str, scene_index: int, context: dict = None) -> str:
+def _generate_transcript_from_outline(
+    content: str, scene_index: int, context: dict
+) -> str:
     """Generate narration transcript from outline content with context awareness"""
-    
+
     # If we have Anthropic API, use it for intelligent transcript generation
     if ANTHROPIC_CLIENT and context:
         try:
@@ -334,46 +317,44 @@ Requirements:
 
 Generate ONLY the transcript text, no additional formatting.
 """
-            
+
             response = ANTHROPIC_CLIENT.messages.create(
                 model="claude-sonnet-4-20250514",  # Sonnet 4 with 400k input context
                 max_tokens=32000,  # Maximum output tokens for Sonnet 4
                 temperature=1.0,
                 stream=True,  # Enable streaming for long requests
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
-            
+
             # Collect streamed response
             full_response = ""
             for chunk in response:
-                if chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
+                if (
+                    chunk.type == "content_block_delta"
+                    and chunk.delta.type == "text_delta"
+                ):
                     full_response += chunk.delta.text
-            
+
             return full_response.strip()
         except Exception as e:
             print(f"⚠️  Anthropic transcript generation failed: {e}")
-    
+
     # Fallback to predefined transcripts
     transcripts = [
         "Traditional neural networks processed text sequentially, one word at a time. This approach was slow and couldn't take advantage of parallel computing.",
-        
         "The attention mechanism changed everything. Instead of processing words one by one, attention allows the model to look at all words simultaneously.",
-        
         "Self-attention is the core innovation. Every word in a sentence looks at every other word to understand its meaning in context.",
-        
         "Multi-head attention uses multiple attention mechanisms in parallel, capturing various types of linguistic patterns simultaneously.",
-        
         "The Transformer architecture combines these attention mechanisms into a complete system with encoder and decoder stacks.",
-        
-        "This breakthrough enabled the AI revolution we see today. From BERT to GPT to ChatGPT, virtually all modern language AI uses Transformers."
+        "This breakthrough enabled the AI revolution we see today. From BERT to GPT to ChatGPT, virtually all modern language AI uses Transformers.",
     ]
-    
+
     return transcripts[scene_index] if scene_index < len(transcripts) else content
 
 
-def _generate_scene_description(content: str, scene_index: int, context: dict = None) -> str:
+def _generate_scene_description(content: str, scene_index: int, context: dict) -> str:
     """Generate visual description from content with context awareness"""
-    
+
     # If we have Anthropic API, use it for intelligent description generation
     if ANTHROPIC_CLIENT and context:
         try:
@@ -395,25 +376,28 @@ Requirements:
 
 Generate ONLY the description text, no additional formatting.
 """
-            
+
             response = ANTHROPIC_CLIENT.messages.create(
                 model="claude-sonnet-4-20250514",  # Use Sonnet 4 for high quality descriptions
                 max_tokens=8192,  # Maximum tokens for Sonnet 4
                 temperature=1.0,
                 stream=True,  # Enable streaming for long requests
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
-            
+
             # Collect streamed response
             full_response = ""
             for chunk in response:
-                if chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
+                if (
+                    chunk.type == "content_block_delta"
+                    and chunk.delta.type == "text_delta"
+                ):
                     full_response += chunk.delta.text
-            
+
             return full_response.strip()
         except Exception as e:
             print(f"⚠️  Anthropic description generation failed: {e}")
-    
+
     # Fallback descriptions
     descriptions = [
         "Visual showing sequential processing vs parallel processing demonstration",
@@ -421,30 +405,40 @@ Generate ONLY the description text, no additional formatting.
         "Diagram showing self-attention mechanism with Q, K, V matrices",
         "Multiple attention heads working in parallel with different patterns",
         "Complete Transformer architecture with encoder-decoder structure",
-        "Timeline showing impact from 2017 Transformer paper to modern AI"
+        "Timeline showing impact from 2017 Transformer paper to modern AI",
     ]
-    
-    return descriptions[scene_index] if scene_index < len(descriptions) else f"Visual representation of: {content[:100]}..."
+
+    return (
+        descriptions[scene_index]
+        if scene_index < len(descriptions)
+        else f"Visual representation of: {content[:100]}..."
+    )
 
 
-def _generate_manim_code_from_content(content: str, scene_name: str, description: str, context: dict = None) -> str:
+def _generate_manim_code_from_content(
+    content: str, scene_name: str, description: str, context: dict
+) -> str:
     """Generate Manim code from content and description using Anthropic SDK"""
-    
+
     # Try to use Anthropic SDK for intelligent generation
     if ANTHROPIC_CLIENT:
         try:
-            return _generate_manim_code_with_anthropic(content, scene_name, description, context)
+            return _generate_manim_code_with_anthropic(
+                content, scene_name, description, context
+            )
         except Exception as e:
             print(f"⚠️  Anthropic generation failed: {e}")
             print("🔄 Falling back to template-based generation...")
-    
+
     # Fallback to template-based generation
     return _generate_manim_code_template(content, scene_name, description)
 
 
-def _generate_manim_code_with_anthropic(content: str, scene_name: str, description: str, context: dict = None) -> str:
+def _generate_manim_code_with_anthropic(
+    content: str, scene_name: str, description: str, context: dict
+) -> str:
     """Generate Manim code using Anthropic SDK for intelligent content creation"""
-    
+
     # Build context-aware prompt
     context_info = ""
     if context:
@@ -456,7 +450,7 @@ ANIMATION CONTEXT:
 - Key Topics: {context.get('user_context', {}).get('key_topics', [])}
 - Focus Areas: {context.get('user_context', {}).get('focus_areas', [])}
 """
-    
+
     prompt = f"""
 You are an expert Manim animator creating educational content. Generate a complete, working Manim scene class that visualizes the given content.
 
@@ -545,17 +539,17 @@ Generate ONLY the Python code for the complete Manim scene. Make it educational,
         max_tokens=8192,  # Maximum tokens for Sonnet 4 - allows for very detailed animations
         temperature=0.3,
         stream=True,  # Enable streaming for long requests
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
     )
-    
+
     # Collect streamed response
     full_response = ""
     for chunk in response:
         if chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
             full_response += chunk.delta.text
-    
+
     generated_code = full_response
-    
+
     # Extract code from response if it's wrapped in markdown
     if "```python" in generated_code:
         start = generated_code.find("```python") + 9
@@ -565,14 +559,16 @@ Generate ONLY the Python code for the complete Manim scene. Make it educational,
         start = generated_code.find("```") + 3
         end = generated_code.find("```", start)
         generated_code = generated_code[start:end].strip()
-    
+
     print(f"✅ Generated Manim code using Anthropic SDK for {scene_name}")
     return generated_code
 
 
-def _generate_manim_code_template(content: str, scene_name: str, description: str) -> str:
+def _generate_manim_code_template(
+    content: str, scene_name: str, description: str
+) -> str:
     """Fallback template-based Manim code generation"""
-    
+
     # Base template for Manim scenes with integrated quality assurance
     base_template = f'''
 from manim import *
@@ -663,15 +659,15 @@ if __name__ == "__main__":
     scene = {scene_name}()
     print(f"Generated {{scene.__class__.__name__}} with quality assurance")
 '''
-    
+
     return base_template.strip()
 
 
 def _get_scene_specific_content(scene_name: str, content: str) -> str:
     """Generate scene-specific content with quality assurance"""
-    
+
     if "1" in scene_name:  # First scene - problem
-        return '''
+        return """
         # Sequential processing problem with safe positioning
         seq_title = Text("Sequential Processing Problem", 
                         font_size=AnimationPresets.SUBTITLE_SIZE, color=RED)
@@ -697,10 +693,10 @@ def _get_scene_specific_content(scene_name: str, content: str) -> str:
         problem_pos = LayoutManager.safe_position(problem, [0, -1.5, 0])
         problem.move_to(problem_pos)
         self.play(Write(problem))
-        '''
-    
+        """
+
     elif "2" in scene_name:  # Second scene - attention
-        return '''
+        return """
         # Attention mechanism with safe positioning
         formula = MathTex(
             r"\\text{Attention}(Q,K,V) = \\text{softmax}(\\frac{QK^T}{\\sqrt{d_k}})V",
@@ -717,17 +713,17 @@ def _get_scene_specific_content(scene_name: str, content: str) -> str:
         parallel_pos = LayoutManager.safe_position(parallel_text, [0, -0.5, 0])
         parallel_text.move_to(parallel_pos)
         self.play(Write(parallel_text))
-        '''
-    
+        """
+
     else:  # Default content with quality assurance
-        return f'''
+        return f"""
         # Content visualization with safe positioning
         content_text = Text("Content: {content[:50]}...", 
                            font_size=AnimationPresets.BODY_SIZE, color=WHITE)
         content_pos = LayoutManager.safe_position(content_text, [0, 0, 0])
         content_text.move_to(content_pos)
         self.play(Write(content_text), run_time=AnimationPresets.NORMAL)
-        '''
+        """
 
 
 if __name__ == "__main__":
@@ -741,50 +737,53 @@ if __name__ == "__main__":
     print("\nReady for production animation creation! 🚀")
 
 
-def generate_manim_code_with_embedded_audio(scene_block: AnsciSceneBlock, scene_name: str, audio_file_path: str) -> str:
+def generate_manim_code_with_embedded_audio(
+    scene_block: AnsciSceneBlock, scene_name: str, audio_file_path: str
+) -> str:
     """
     Generate Manim code with embedded audio using self.add_sound()
     This approach embeds audio directly in the video during Manim rendering
     """
-    
+
     # Get the original Manim code
     original_code = scene_block.manim_code
-    
+
     # Convert to absolute path for Manim
     from pathlib import Path
+
     abs_audio_path = Path(audio_file_path).resolve()
-    
+
     # Insert audio embedding at the beginning of construct method
     audio_line = f'        # Embedded audio narration\n        self.add_sound("{abs_audio_path}")\n'
-    
+
     # Find the construct method and insert audio after it
-    lines = original_code.split('\n')
+    lines = original_code.split("\n")
     modified_lines = []
-    
+
     for i, line in enumerate(lines):
         modified_lines.append(line)
-        
+
         # Insert audio right after "def construct(self):"
-        if 'def construct(self):' in line:
+        if "def construct(self):" in line:
             modified_lines.append(audio_line)
-    
-    return '\n'.join(modified_lines)
+
+    return "\n".join(modified_lines)
 
 
-def create_audiovisual_scene_block(scene_block: AnsciSceneBlock, audio_file_path: str, scene_name: str) -> AnsciSceneBlock:
+def create_audiovisual_scene_block(
+    scene_block: AnsciSceneBlock, audio_file_path: str, scene_name: str
+) -> AnsciSceneBlock:
     """
     Create a new scene block with embedded audio in the Manim code
     """
     # Generate new Manim code with embedded audio
     audiovisual_manim_code = generate_manim_code_with_embedded_audio(
-        scene_block, 
-        scene_name, 
-        audio_file_path
+        scene_block, scene_name, audio_file_path
     )
-    
+
     # Create new scene block with embedded audio
     return AnsciSceneBlock(
         transcript=scene_block.transcript,
         description=f"[WITH AUDIO] {scene_block.description}",
-        manim_code=audiovisual_manim_code
+        manim_code=audiovisual_manim_code,
     )
