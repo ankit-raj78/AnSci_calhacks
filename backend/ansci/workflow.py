@@ -7,7 +7,6 @@ from anthropic.types import MessageParam
 from .outline import generate_outline
 from .animate import create_ansci_animation
 from .models import AnsciAnimation
-from .service import llm
 
 
 def create_animation(
