@@ -336,13 +336,20 @@ Generate ONLY the transcript text, no additional formatting.
 """
             
             response = ANTHROPIC_CLIENT.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=500,
-                temperature=0.4,
+                model="claude-sonnet-4-20250514",  # Sonnet 4 with 400k input context
+                max_tokens=32000,  # Maximum output tokens for Sonnet 4
+                temperature=1.0,
+                stream=True,  # Enable streaming for long requests
                 messages=[{"role": "user", "content": prompt}]
             )
             
-            return response.content[0].text.strip()
+            # Collect streamed response
+            full_response = ""
+            for chunk in response:
+                if chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
+                    full_response += chunk.delta.text
+            
+            return full_response.strip()
         except Exception as e:
             print(f"⚠️  Anthropic transcript generation failed: {e}")
     
@@ -390,13 +397,20 @@ Generate ONLY the description text, no additional formatting.
 """
             
             response = ANTHROPIC_CLIENT.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=200,
-                temperature=0.3,
+                model="claude-sonnet-4-20250514",  # Use Sonnet 4 for high quality descriptions
+                max_tokens=8192,  # Maximum tokens for Sonnet 4
+                temperature=1.0,
+                stream=True,  # Enable streaming for long requests
                 messages=[{"role": "user", "content": prompt}]
             )
             
-            return response.content[0].text.strip()
+            # Collect streamed response
+            full_response = ""
+            for chunk in response:
+                if chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
+                    full_response += chunk.delta.text
+            
+            return full_response.strip()
         except Exception as e:
             print(f"⚠️  Anthropic description generation failed: {e}")
     
@@ -459,14 +473,24 @@ REQUIREMENTS:
 5. Use AnimationPresets for consistent timing and styling
 6. Make the animation educational and visually engaging
 7. Include proper imports and quality assurance components
-8. The animation should be 10-15 seconds long
-9. Use appropriate colors, fonts, and transitions
-10. Focus on making complex concepts easy to understand
-11. Consider the context and user preferences provided
-12. If this is part of a series, ensure it builds appropriately on previous concepts
-13. IMPORTANT: Only use basic Manim imports - do NOT import external libraries like librosa, scipy, etc.
-14. Use only: from manim import *, numpy as np, functools.wraps - no other imports
-15. Keep animations simple and avoid complex mathematical computations
+8. The animation should be 45-60 seconds long with detailed explanations and multiple scenes
+9. Use multiple visual elements, step-by-step reveals, and rich transitions for high production value
+10. Include detailed diagrams, equations, graphs, and interactive elements
+11. Use vibrant colors, professional typography, and smooth transitions with variety
+12. Focus on making complex concepts easy to understand with rich, detailed visuals
+13. Consider the context and user preferences provided
+14. If this is part of a series, ensure it builds appropriately on previous concepts
+15. IMPORTANT: Only use basic Manim imports - do NOT import external libraries like librosa, scipy, etc.
+16. Use only: from manim import *, numpy as np, functools.wraps - no other imports
+17. Keep animations simple and avoid complex mathematical computations
+18. Include multiple visual elements: detailed graphs, step-by-step equations, comprehensive diagrams, animated text
+19. Add strategic wait() periods (2-4 seconds) to let viewers absorb information
+20. Use Write(), Create(), Transform(), FadeIn(), FadeOut(), ReplacementTransform() for engaging transitions
+21. Create professional-quality educational content with detailed narration timing
+22. Include at least 5-8 distinct visual elements or animation sequences
+23. Use multiple colors, highlight important parts, and create visual hierarchy
+24. Add explanatory text boxes, labels, and annotations for clarity
+25. Make each animation comprehensive and self-contained for maximum educational value
 
 TEMPLATE STRUCTURE:
 ```python
@@ -517,13 +541,20 @@ Generate ONLY the Python code for the complete Manim scene. Make it educational,
 """
 
     response = ANTHROPIC_CLIENT.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=4000,
+        model="claude-sonnet-4-20250514",  # Use Sonnet 4 for highest quality Manim code generation
+        max_tokens=8192,  # Maximum tokens for Sonnet 4 - allows for very detailed animations
         temperature=0.3,
+        stream=True,  # Enable streaming for long requests
         messages=[{"role": "user", "content": prompt}]
     )
     
-    generated_code = response.content[0].text
+    # Collect streamed response
+    full_response = ""
+    for chunk in response:
+        if chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
+            full_response += chunk.delta.text
+    
+    generated_code = full_response
     
     # Extract code from response if it's wrapped in markdown
     if "```python" in generated_code:

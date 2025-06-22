@@ -32,27 +32,26 @@ def validate_scene_block(scene_block: AnsciSceneBlock) -> bool:
     Returns:
         True if valid, False otherwise
     """
-    # VALIDATION COMMENTED OUT FOR TESTING
-    # if not scene_block.manim_code.strip():
-    #     print("❌ Validation failed: Empty manim_code")
-    #     return False
+    if not scene_block.manim_code.strip():
+        print("❌ Validation failed: Empty manim_code")
+        return False
     
-    # if not scene_block.transcript.strip():
-    #     print("⚠️  Warning: Empty transcript")
+    if not scene_block.transcript.strip():
+        print("⚠️  Warning: Empty transcript")
     
-    # if not scene_block.description.strip():
-    #     print("⚠️  Warning: Empty description")
+    if not scene_block.description.strip():
+        print("⚠️  Warning: Empty description")
     
-    # # Check for basic Manim structure
-    # if "class" not in scene_block.manim_code:
-    #     print("❌ Validation failed: No class definition in manim_code")
-    #     return False
+    # Check for basic Manim structure
+    if "class" not in scene_block.manim_code:
+        print("❌ Validation failed: No class definition in manim_code")
+        return False
     
-    # if "def construct" not in scene_block.manim_code:
-    #     print("❌ Validation failed: No construct method in manim_code")
-    #     return False
+    if "def construct" not in scene_block.manim_code:
+        print("❌ Validation failed: No construct method in manim_code")
+        return False
     
-    print("✅ Scene block validation passed (validation disabled)")
+    print("✅ Scene block validation passed")
     return True
 
 
@@ -66,20 +65,19 @@ def validate_animation(animation: AnsciAnimation) -> bool:
     Returns:
         True if valid, False otherwise
     """
-    # VALIDATION COMMENTED OUT FOR TESTING
-    # if not animation.blocks:
-    #     print("❌ Animation validation failed: No scene blocks")
-    #     return False
+    if not animation.blocks:
+        print("❌ Animation validation failed: No scene blocks")
+        return False
     
-    print(f"🔍 Validating animation with {len(animation.blocks)} scene blocks (validation disabled)...")
+    print(f"🔍 Validating animation with {len(animation.blocks)} scene blocks...")
     
-    # for i, block in enumerate(animation.blocks):
-    #     print(f"   Validating Scene {i+1}...")
-    #     if not validate_scene_block(block):
-    #         print(f"❌ Animation validation failed at Scene {i+1}")
-    #         return False
+    for i, block in enumerate(animation.blocks):
+        print(f"   Validating Scene {i+1}...")
+        if not validate_scene_block(block):
+            print(f"❌ Animation validation failed at Scene {i+1}")
+            return False
     
-    print("✅ Animation validation passed (validation disabled)")
+    print("✅ Animation validation passed")
     return True
 
 
@@ -104,21 +102,21 @@ class AnimationRenderer:
         """
         print(f"🎬 Starting animation rendering (quality: {quality})")
         
-        # Quality assurance validation (COMMENTED OUT FOR TESTING)
-        # if self.enable_validation:
-        #     if not validate_animation(animation):
-        #         print("❌ Animation rendering aborted due to validation failures")
-        #         return []
+        # Quality assurance validation
+        if self.enable_validation:
+            if not validate_animation(animation):
+                print("❌ Animation rendering aborted due to validation failures")
+                return []
         
         video_paths = []
         
         for i, scene_block in enumerate(animation.blocks):
             print(f"🎬 Rendering Scene {i+1}/{len(animation.blocks)}...")
             
-            # Additional per-scene validation (COMMENTED OUT FOR TESTING)
-            # if self.enable_validation and not validate_scene_block(scene_block):
-            #     print(f"⚠️  Skipping Scene {i+1} due to validation failure")
-            #     continue
+            # Additional per-scene validation
+            if self.enable_validation and not validate_scene_block(scene_block):
+                print(f"⚠️  Skipping Scene {i+1} due to validation failure")
+                continue
             
             video_path = self._render_scene_block(scene_block, f"Scene{i+1}", quality)
             if video_path:
@@ -360,10 +358,9 @@ def render_audiovisual_animation_embedded(animation: AnsciAnimation, output_dir:
     """
     from .audio import create_audiovisual_animation_with_embedded_audio
     
-    # VALIDATION COMMENTED OUT FOR TESTING
-    # if enable_validation and not validate_animation(animation):
-    #     print("❌ Animation validation failed")
-    #     return []
+    if enable_validation and not validate_animation(animation):
+        print("❌ Animation validation failed")
+        return []
     
     print("🎬🎙️  Starting embedded audiovisual animation rendering...")
     

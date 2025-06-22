@@ -434,21 +434,13 @@ class AudioNarrationService:
                 return str(final_path)
                 
             else:
-                # Audio is longer than animation - fade out at animation end
-                print(f"   ✂️  Trimming audio from {current_duration:.1f}s to {target_duration:.1f}s")
+                # Audio is longer than animation - let it play naturally, no fade
+                print(f"   🎵 Audio is longer ({current_duration:.1f}s) than target ({target_duration:.1f}s)")
+                print(f"   ✅ Keeping natural audio length - no artificial fade-out")
                 
-                fade_start = max(0, target_duration - 1.0)  # Start fade 1 second before end
-                
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-i", str(audio_path),
-                    "-af", f"afade=t=out:st={fade_start}:d={target_duration - fade_start}",
-                    "-t", str(target_duration),
-                    str(final_path)
-                ]
-                
-                subprocess.run(cmd, capture_output=True, check=True)
-                print(f"   ✅ Trimmed audio to {target_duration:.1f}s with fade out")
+                # Just copy the file without trimming or fading
+                audio_path.rename(final_path)
+                print(f"   ✅ Audio kept at natural duration: {current_duration:.1f}s")
                 return str(final_path)
                 
         except Exception as e:
@@ -610,7 +602,7 @@ class AudioNarrationService:
             final_duration = self._get_audio_duration(str(final_path))
             print(f"   ✅ Audio processed successfully")
             print(f"   📏 Final duration: {final_duration:.1f}s")
-            print(f"   🎵 Output: Proper Stereo, 48kHz, 128kbps MP3 (Manim-optimized)")
+            print(f"   🎵 Output: Proper Stereo, 48kHz, 128kbps MP3 (natural duration, no fade)")
             
             if target_duration and abs(final_duration - target_duration) > 0.5:
                 print(f"   ⚠️  Duration mismatch: expected {target_duration:.1f}s, got {final_duration:.1f}s")
@@ -643,12 +635,8 @@ class AudioNarrationService:
         # Instead of mono->stereo duplication, create true stereo with slight delay to prevent echo
         filters.append("pan=stereo|c0=0.7*c0|c1=0.7*c0")  # Distribute mono to both channels properly
         
-        # 5. Handle duration adjustment with proper fading
-        if target_duration and current_duration > target_duration:
-            # Fade out at the end to prevent abrupt cutoff
-            fade_start = max(0, target_duration - 1.0)
-            fade_duration = target_duration - fade_start
-            filters.append(f"afade=t=out:st={fade_start}:d={fade_duration}")
+        # 5. NO FADE-OUT: Let audio play naturally for full speech clarity
+        # Removed automatic fade-out to prevent animations from fading out prematurely
         
         return ",".join(filters)
     
@@ -742,7 +730,7 @@ def create_audiovisual_animation_with_embedded_audio(animation: AnsciAnimation, 
         audio_path = service.generate_narration_for_scene(
             scene_block, 
             scene_name, 
-            target_duration=None  # Let audio be natural length
+            target_duration=None  # Let audio be natural length - no forced duration matching
         )
         
         if audio_path:

@@ -18,9 +18,10 @@ def generate_outline(history: list[MessageParam]) -> tuple[str, AnsciOutline | N
     that the history contains the paper as a file, and user messages.
     """
     response = client.messages.create(
-        max_tokens=4096,
-        model="claude-3-5-haiku-latest",
+        max_tokens=32000,  # Maximum tokens for Sonnet 4
+        model="claude-sonnet-4-20250514",  # Use Sonnet 4 for higher quality outlines
         system="You are a seasoned educator.",  # <-- role prompt
+        stream=True,  # Enable streaming for long requests
         messages=history,
         tools=[
             {
@@ -31,16 +32,37 @@ def generate_outline(history: list[MessageParam]) -> tuple[str, AnsciOutline | N
         ],
     )
 
+    # Collect streamed response
+    text_content = ""
+    tool_call = None
+    tool_input_json = ""
+    
+    for chunk in response:
+        if chunk.type == "content_block_start":
+            if chunk.content_block.type == "text":
+                pass  # Text block started
+            elif chunk.content_block.type == "tool_use":
+                tool_call = chunk.content_block
+        elif chunk.type == "content_block_delta":
+            if chunk.delta.type == "text_delta":
+                text_content += chunk.delta.text
+            elif chunk.delta.type == "input_json_delta":
+                # Accumulate tool input JSON
+                tool_input_json += chunk.delta.partial_json
+        elif chunk.type == "content_block_stop":
+            pass  # Block completed
+
     # Check if there's a tool call in the response
-    if len(response.content) > 1 and hasattr(response.content[1], "input"):
-        # Parse the tool call input into AnsciOutline object
-        tool_input = response.content[1].input
-        if isinstance(tool_input, str):
-            tool_input = json.loads(tool_input)
+    if tool_call and tool_input_json:
+        # Parse the accumulated tool call input into AnsciOutline object
+        try:
+            tool_input = json.loads(tool_input_json)
+            return (text_content, AnsciOutline(**tool_input))
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"⚠️ Failed to parse tool input: {e}")
+            return (text_content, None)
 
-        return (response.content[0].text, AnsciOutline(**tool_input))
-
-    return (response.content[0].text, None)
+    return (text_content, None)
 
 
 if __name__ == "__main__":
