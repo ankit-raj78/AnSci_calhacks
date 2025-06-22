@@ -10,16 +10,25 @@ import subprocess
 import asyncio
 from pathlib import Path
 from typing import List, Optional
-import dotenv
 from lmnt.api import Speech
 
 from .animate import create_audiovisual_scene_block
 from .models import AnsciSceneBlock, AnsciAnimation
 
-dotenv.load_dotenv()
+# Load API key directly from environment
+lmnt_api_key = os.environ.get("LMNT_API_KEY")
+if not lmnt_api_key:
+    # Try loading from .env file manually
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                if line.startswith("LMNT_API_KEY="):
+                    lmnt_api_key = line.split("=", 1)[1].strip()
+                    break
 
 # Initialize LMNT client
-assert os.getenv("LMNT_API_KEY") is not None, "LMNT_API_KEY is not set"
+assert lmnt_api_key is not None, "LMNT_API_KEY is not set"
 
 
 class AudioNarrationService:

@@ -37,6 +37,7 @@ backend/ansci/
 
 ## Usage
 
+### Basic Usage
 ```python
 from backend.ansci.types import AnsciSceneBlock, AnsciAnimation
 from backend.ansci.animation_service import AnimationGenerationService
@@ -55,6 +56,33 @@ animation = AnsciAnimation(blocks=[scene])
 service = AnimationGenerationService()
 video_paths = service.render_animation(animation)
 ```
+
+### Command Line Interface
+
+Generate educational animations from PDF papers:
+
+```bash
+# Basic usage - creates a single combined video
+python main.py --paper research.pdf --output ./videos
+
+# Create multiple video splits
+python main.py --paper paper.pdf --output ./videos --splits 3
+
+# Create one video per scene
+python main.py --paper paper.pdf --output ./videos --splits 1
+
+# With custom prompt
+python main.py --paper attention.pdf --output ./videos --prompt "Focus on the attention mechanism"
+```
+
+#### CLI Options
+- `--paper`: Path to the PDF paper to animate (required)
+- `--output`: Output directory for generated videos (required)
+- `--prompt`: Custom prompt to guide animation generation (optional)
+- `--splits`: Number of video splits to create (optional)
+  - If not specified: Creates a single combined video from all scenes
+  - If `--splits 1`: Creates one video file per scene
+  - If `--splits N` (N > 1): Creates N video files by grouping scenes
 
 ## Dependencies
 
@@ -86,6 +114,8 @@ python -m ansci.production_example
 ✅ **Self-contained**: No external file dependencies
 ✅ **Flexible**: Handles any manim_code content
 ✅ **Production Ready**: Tested and robust
+✅ **Video Splitting**: Flexible output options (single video, per-scene videos, or custom splits)
+✅ **Audio Integration**: Embedded audio with synchronized narration
 
 ## License
 

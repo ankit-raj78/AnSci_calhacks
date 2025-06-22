@@ -5,7 +5,7 @@ from pathlib import Path
 from ansci.workflow import create_animation
 
 
-def main(paper_path: str, output_path: str, prompt: str | None = None):
+def main(paper_path: str, output_path: str, prompt: str | None = None, splits: int | None = None):
     """
     Main entry point for PDF to Animation workflow
     
@@ -13,6 +13,7 @@ def main(paper_path: str, output_path: str, prompt: str | None = None):
         paper_path: Path to PDF file
         output_path: Output directory for generated videos
         prompt: Optional custom prompt for animation generation
+        splits: Number of video splits to create (if None, create one combined video)
     """
     print("🎬🎙️ AnSci Animation Generator")
     print("=" * 40)
@@ -20,6 +21,10 @@ def main(paper_path: str, output_path: str, prompt: str | None = None):
     print(f"📁 Output: {output_path}")
     if prompt:
         print(f"💭 Custom prompt: {prompt[:50]}...")
+    if splits:
+        print(f"🎞️  Video splits: {splits} separate videos")
+    else:
+        print(f"🎞️  Video output: Single combined video")
     print()
     
     # Validate input file
@@ -39,7 +44,7 @@ def main(paper_path: str, output_path: str, prompt: str | None = None):
         # Run the complete workflow
         with open(paper_path, "rb") as paper_file:
             paper_bytes = BytesIO(paper_file.read())
-            video_paths = create_animation(paper_bytes, output_path, prompt)
+            video_paths = create_animation(paper_bytes, output_path, prompt, splits)
         
         if video_paths:
             print(f"\n🎉 SUCCESS! Generated {len(video_paths)} animation videos:")
@@ -70,6 +75,8 @@ Examples:
   python main.py --paper paper.pdf --output ./animations
   python main.py --paper research.pdf --output ./videos --prompt "Focus on the mathematical concepts"
   python main.py --paper attention.pdf --output ./transformer_videos --prompt "Explain the attention mechanism visually"
+  python main.py --paper paper.pdf --output ./videos --splits 3  # Create 3 separate video files
+  python main.py --paper paper.pdf --output ./videos --splits 1  # Create 1 video per scene
         """
     )
     parser.add_argument("--paper", type=str, required=True, 
@@ -78,6 +85,8 @@ Examples:
                        help="Output directory for generated animation videos")
     parser.add_argument("--prompt", type=str,
                        help="Custom prompt to guide animation generation (optional)")
+    parser.add_argument("--splits", type=int,
+                       help="Number of video splits to create (default: single combined video)")
     
     args = parser.parse_args()
-    main(args.paper, args.output, args.prompt)
+    main(args.paper, args.output, args.prompt, args.splits)

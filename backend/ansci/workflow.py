@@ -11,7 +11,7 @@ from .render import render_audiovisual_animation_embedded
 
 
 def create_animation(
-    file: BytesIO, filename: str, prompt: str | None = None
+    file: BytesIO, filename: str, prompt: str | None = None, splits: int | None = None
 ) -> Optional[List[str]]:
     """
     Complete animation workflow: PDF → Outline → Animation → Audio → Video
@@ -20,6 +20,7 @@ def create_animation(
         file: PDF file as BytesIO
         filename: Output filename/path for the animation
         prompt: Optional custom prompt for animation generation
+        splits: Number of video splits to create (None = single combined video)
 
     Returns:
         List of paths to generated video files with embedded audio
@@ -85,14 +86,25 @@ def create_animation(
             scene_blocks.append(scene)
             print(f"✅ Scene {i+1}: {scene.description[:60]}...")
 
-            # Limit scenes for testing (remove in production)
-            if len(scene_blocks) >= 3:  # Process max 3 scenes
-                print(f"⚡ Limited to {len(scene_blocks)} scenes for testing")
-                break
-
         if not scene_blocks:
             print("❌ No animation scenes were generated")
             return None
+
+        # Apply splits if specified
+        if splits is not None:
+            if splits <= 0:
+                print("❌ Error: splits must be a positive number")
+                return None
+            elif splits == 1:
+                print("🎞️  Creating one video per scene")
+            else:
+                total_scenes = len(scene_blocks)
+                if splits > total_scenes:
+                    print(f"⚠️  Warning: Requested {splits} splits but only {total_scenes} scenes available")
+                    splits = total_scenes
+                print(f"🎞️  Creating {splits} video splits from {total_scenes} scenes")
+        else:
+            print("🎞️  Creating single combined video from all scenes")
 
         # Create complete animation
         animation = AnsciAnimation(blocks=scene_blocks)
@@ -117,6 +129,7 @@ def create_animation(
             output_dir=str(output_dir),
             quality="high",
             enable_validation=True,
+            splits=splits,
         )
 
         if video_paths:
@@ -188,7 +201,7 @@ def _verify_audio_in_video(video_path: str) -> bool:
 
 # Convenience function for direct usage
 def create_animation_from_pdf_path(
-    pdf_path: str, output_path: str, prompt: str | None = None
+    pdf_path: str, output_path: str, prompt: str | None = None, splits: int | None = None
 ) -> Optional[List[str]]:
     """
     Create animation directly from PDF file path
@@ -197,6 +210,7 @@ def create_animation_from_pdf_path(
         pdf_path: Path to PDF file
         output_path: Path for output videos
         prompt: Optional custom prompt
+        splits: Number of video splits to create (None = single combined video)
 
     Returns:
         List of paths to generated video files
@@ -204,7 +218,7 @@ def create_animation_from_pdf_path(
     try:
         with open(pdf_path, "rb") as f:
             pdf_bytes = BytesIO(f.read())
-            return create_animation(pdf_bytes, output_path, prompt)
+            return create_animation(pdf_bytes, output_path, prompt, splits)
     except Exception as e:
         print(f"❌ Error reading PDF file: {e}")
         return None
