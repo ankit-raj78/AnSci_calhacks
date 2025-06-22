@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 from functools import wraps
 
-from .types import AnsciAnimation, AnsciSceneBlock
+from .models import AnsciAnimation, AnsciSceneBlock
 
 # Quality Assurance for Rendering
 try:

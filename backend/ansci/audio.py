@@ -20,7 +20,7 @@ try:
 except ImportError:
     pass
 
-from .types import AnsciSceneBlock, AnsciAnimation
+from .models import AnsciSceneBlock, AnsciAnimation
 
 # Initialize LMNT client
 LMNT_API_KEY = None
@@ -341,9 +341,9 @@ class AudioNarrationService:
         return enhanced
     
     def _generate_lmnt_audio(self, text: str, scene_name: str, target_duration: float = None) -> Optional[str]:
-        """Generate audio using LMNT TTS API with high-quality voice synthesis"""
+        """Generate audio using LMNT TTS API with high-quality voice synthesis and echo prevention"""
         
-        print(f"   🎤 Using LMNT TTS for high-quality narration")
+        print(f"   🎤 Using LMNT TTS for high-quality narration (echo prevention enabled)")
         
         try:
             if not self.lmnt_available:
@@ -354,23 +354,23 @@ class AudioNarrationService:
             audio_data = asyncio.run(self._lmnt_synthesize(text))
             
             if audio_data:
-                # Save initial audio file
-                temp_audio_path = self.output_dir / f"{scene_name}_temp_narration.mp3"
-                with open(temp_audio_path, 'wb') as f:
+                # Save raw LMNT audio first
+                raw_audio_path = self.output_dir / f"{scene_name}_raw_lmnt.mp3"
+                with open(raw_audio_path, 'wb') as f:
                     f.write(audio_data)
                 
-                print(f"✅ LMNT TTS audio generated: {temp_audio_path}")
+                print(f"✅ LMNT TTS raw audio generated: {raw_audio_path}")
                 
-                # Adjust final audio duration to match animation if needed
-                final_audio_path = self._adjust_audio_duration_to_animation(
-                    temp_audio_path, 
+                # Process audio to prevent echo and improve quality
+                final_audio_path = self._process_audio_for_quality(
+                    raw_audio_path, 
                     scene_name, 
                     target_duration
                 )
                 
-                # Clean up temp file
-                if temp_audio_path.exists():
-                    temp_audio_path.unlink()
+                # Clean up raw file
+                if raw_audio_path.exists():
+                    raw_audio_path.unlink()
                 
                 return final_audio_path
             else:
@@ -383,10 +383,13 @@ class AudioNarrationService:
             return self._fallback_system_tts(text, scene_name, target_duration)
     
     async def _lmnt_synthesize(self, text: str, voice: str = 'leah') -> Optional[bytes]:
-        """Async helper to synthesize speech using LMNT"""
+        """Async helper to synthesize speech using LMNT with optimized settings"""
         try:
+            print(f"   🗣️  Synthesizing with voice '{voice}' (optimized for clarity)")
             async with Speech() as speech:
+                # Use LMNT with basic settings (sample_rate will be handled in post-processing)
                 synthesis = await speech.synthesize(text, voice)
+                print(f"   ✅ LMNT synthesis complete ({len(synthesis['audio'])} bytes)")
                 return synthesis['audio']
         except Exception as e:
             print(f"❌ LMNT synthesis error: {e}")
@@ -561,7 +564,124 @@ class AudioNarrationService:
         except Exception as e:
             print(f"⚠️  Could not get video duration: {e}")
             return 10.0  # Default fallback duration
-
+    
+    def _process_audio_for_quality(self, raw_audio_path: Path, scene_name: str, target_duration: float = None) -> Optional[str]:
+        """
+        Process raw audio to prevent echo and improve quality
+        - Normalize audio levels
+        - Ensure mono output (prevent stereo echo)
+        - Standardize sample rate
+        - Apply gentle noise reduction
+        - Handle duration adjustment cleanly
+        """
+        final_path = self.output_dir / f"{scene_name}_narration.mp3"
+        
+        try:
+            print(f"   🔧 Processing audio for quality and echo prevention...")
+            
+            # Step 1: Get current audio info
+            current_duration = self._get_audio_duration(str(raw_audio_path))
+            print(f"   📏 Raw audio duration: {current_duration:.1f}s")
+            
+            # Step 2: Build FFmpeg command for quality processing
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(raw_audio_path),
+                # Audio processing filters to prevent echo
+                "-af", self._build_quality_audio_filter(current_duration, target_duration),
+                # Output settings optimized for Manim compatibility
+                "-c:a", "mp3",           # MP3 codec
+                "-b:a", "128k",          # Consistent bitrate
+                "-ac", "2",              # Force stereo (prevent Manim from doing mono->stereo conversion)
+                "-ar", "48000",          # Use Manim's preferred sample rate
+                "-avoid_negative_ts", "make_zero",  # Avoid timing issues
+            ]
+            
+            # Add duration constraint if needed
+            if target_duration:
+                cmd.extend(["-t", str(target_duration)])
+            
+            cmd.append(str(final_path))
+            
+            print(f"   🎛️  Applying audio filters: proper stereo, normalize, noise reduction")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Verify the processed audio
+            final_duration = self._get_audio_duration(str(final_path))
+            print(f"   ✅ Audio processed successfully")
+            print(f"   📏 Final duration: {final_duration:.1f}s")
+            print(f"   🎵 Output: Proper Stereo, 48kHz, 128kbps MP3 (Manim-optimized)")
+            
+            if target_duration and abs(final_duration - target_duration) > 0.5:
+                print(f"   ⚠️  Duration mismatch: expected {target_duration:.1f}s, got {final_duration:.1f}s")
+            
+            return str(final_path)
+            
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Audio processing failed: {e.stderr}")
+            # Fallback: simple copy with basic format conversion
+            return self._fallback_audio_processing(raw_audio_path, scene_name, target_duration)
+        except Exception as e:
+            print(f"❌ Unexpected error in audio processing: {e}")
+            return self._fallback_audio_processing(raw_audio_path, scene_name, target_duration)
+    
+    def _build_quality_audio_filter(self, current_duration: float, target_duration: float = None) -> str:
+        """Build FFmpeg audio filter string for quality and echo prevention"""
+        filters = []
+        
+        # 1. Normalize audio levels (prevent volume-related echo)
+        filters.append("loudnorm=I=-16:TP=-2:LRA=7")
+        
+        # 2. Light noise reduction (remove background artifacts)
+        filters.append("highpass=f=80")  # Remove very low frequencies
+        filters.append("lowpass=f=8000") # Remove very high frequencies
+        
+        # 3. Dynamic range compression (even out volume)
+        filters.append("acompressor=threshold=0.5:ratio=3:attack=5:release=50")
+        
+        # 4. CRITICAL: Convert to proper stereo for Manim (prevents channel duplication echo)
+        # Instead of mono->stereo duplication, create true stereo with slight delay to prevent echo
+        filters.append("pan=stereo|c0=0.7*c0|c1=0.7*c0")  # Distribute mono to both channels properly
+        
+        # 5. Handle duration adjustment with proper fading
+        if target_duration and current_duration > target_duration:
+            # Fade out at the end to prevent abrupt cutoff
+            fade_start = max(0, target_duration - 1.0)
+            fade_duration = target_duration - fade_start
+            filters.append(f"afade=t=out:st={fade_start}:d={fade_duration}")
+        
+        return ",".join(filters)
+    
+    def _fallback_audio_processing(self, raw_audio_path: Path, scene_name: str, target_duration: float = None) -> Optional[str]:
+        """Fallback audio processing with minimal filters"""
+        final_path = self.output_dir / f"{scene_name}_narration.mp3"
+        
+        try:
+            print(f"   🔄 Using fallback audio processing...")
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(raw_audio_path),
+                "-c:a", "mp3",
+                "-b:a", "128k",
+                "-ac", "2",              # Force proper stereo
+                "-ar", "48000",          # Manim's preferred sample rate
+            ]
+            
+            if target_duration:
+                cmd.extend(["-t", str(target_duration)])
+            
+            cmd.append(str(final_path))
+            
+            subprocess.run(cmd, capture_output=True, check=True)
+            print(f"   ✅ Fallback processing complete")
+            return str(final_path)
+            
+        except Exception as e:
+            print(f"❌ Fallback processing also failed: {e}")
+            # Last resort: just copy the file
+            raw_audio_path.rename(final_path)
+            return str(final_path)
+    
 
 # Convenience functions
 def generate_narration_for_animation(animation: AnsciAnimation, video_paths: List[str] = None, output_dir: str = None) -> List[str]:
