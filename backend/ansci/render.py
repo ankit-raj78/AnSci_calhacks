@@ -387,11 +387,86 @@ class AnimationPresets:
 #     return ""
 
 
+def _combine_videos(video_paths: List[str], output_path: str) -> bool:
+    """
+    Combine multiple video files into a single video using ffmpeg
+    
+    Args:
+        video_paths: List of paths to video files to combine
+        output_path: Path for the combined output video
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    if not video_paths:
+        print("❌ No videos to combine")
+        return False
+    
+    if len(video_paths) == 1:
+        # Single video, just copy/rename
+        try:
+            from shutil import copy2
+            copy2(video_paths[0], output_path)
+            print(f"✅ Copied single video to: {Path(output_path).name}")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to copy video: {e}")
+            return False
+    
+    # Multiple videos - use ffmpeg to concatenate
+    try:
+        # Create a temporary file list for ffmpeg
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            for video_path in video_paths:
+                # Escape the path for ffmpeg
+                escaped_path = str(Path(video_path).resolve()).replace("'", "'\"'\"'")
+                f.write(f"file '{escaped_path}'\n")
+            temp_list_file = f.name
+        
+        # Use ffmpeg to concatenate videos
+        cmd = [
+            'ffmpeg',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', temp_list_file,
+            '-c', 'copy',  # Copy streams without re-encoding for speed
+            '-y',  # Overwrite output file
+            output_path
+        ]
+        
+        print(f"🔗 Combining {len(video_paths)} videos into: {Path(output_path).name}")
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        # Clean up temporary file
+        Path(temp_list_file).unlink(missing_ok=True)
+        
+        if result.returncode == 0:
+            print(f"✅ Successfully combined videos")
+            return True
+        else:
+            print(f"❌ ffmpeg failed: {result.stderr}")
+            return False
+            
+    except FileNotFoundError:
+        print("❌ ffmpeg not found. Please install ffmpeg to combine videos")
+        return False
+    except Exception as e:
+        print(f"❌ Error combining videos: {e}")
+        return False
+
+
 def render_audiovisual_animation_embedded(
     animation: AnsciAnimation,
     output_dir: str,
     quality: str = "high",
     enable_validation: bool = True,
+    splits: Optional[int] = None,
 ) -> List[str]:
     """
     Render audiovisual animation using embedded audio approach
@@ -402,6 +477,7 @@ def render_audiovisual_animation_embedded(
         output_dir: Directory for output files
         quality: Rendering quality
         enable_validation: Whether to validate before rendering
+        splits: Number of video splits to create (None = single combined video)
 
     Returns:
         List of paths to audiovisual video files
@@ -413,15 +489,146 @@ def render_audiovisual_animation_embedded(
 
     print("🎬🎙️  Starting embedded audiovisual animation rendering...")
 
+    # Handle splits logic
+    if splits is not None:
+        if splits <= 0:
+            print("❌ Error: splits must be a positive number")
+            return []
+        
+        total_scenes = len(animation.blocks)
+        
+        if splits == 1:
+            # Create one video per scene
+            print(f"🎞️  Creating {total_scenes} separate videos (one per scene)")
+            video_paths = []
+            
+            for i, scene_block in enumerate(animation.blocks):
+                print(f"🎬 Rendering Scene {i+1}/{total_scenes} as separate video...")
+                
+                # Create single-scene animation
+                single_scene_animation = AnsciAnimation(blocks=[scene_block])
+                
+                # Create audiovisual version
+                audiovisual_animation = create_audiovisual_animation_with_embedded_audio(
+                    single_scene_animation, output_dir
+                )
+                
+                # Render the single scene
+                renderer = AnimationRenderer(output_dir)
+                scene_videos = renderer.render_animation(audiovisual_animation, quality)
+                
+                if scene_videos:
+                    # Rename to indicate scene number
+                    for video_path in scene_videos:
+                        old_path = Path(video_path)
+                        new_path = old_path.parent / f"scene_{i+1:02d}_{old_path.name}"
+                        old_path.rename(new_path)
+                        video_paths.append(str(new_path))
+                        print(f"✅ Scene {i+1}: {new_path.name}")
+            
+            return video_paths
+            
+        elif splits > 1:
+            # Create multiple video files by grouping scenes
+            scenes_per_split = max(1, total_scenes // splits)
+            remainder = total_scenes % splits
+            
+            print(f"🎞️  Creating {splits} video splits from {total_scenes} scenes")
+            print(f"📊 ~{scenes_per_split} scenes per split")
+            
+            video_paths = []
+            scene_idx = 0
+            
+            for split_num in range(splits):
+                # Calculate scenes for this split
+                current_split_size = scenes_per_split
+                if split_num < remainder:
+                    current_split_size += 1
+                
+                if scene_idx >= total_scenes:
+                    break
+                
+                end_idx = min(scene_idx + current_split_size, total_scenes)
+                split_scenes = animation.blocks[scene_idx:end_idx]
+                
+                print(f"🎬 Rendering split {split_num + 1}/{splits} (scenes {scene_idx + 1}-{end_idx})...")
+                
+                # Create animation for this split
+                split_animation = AnsciAnimation(blocks=split_scenes)
+                
+                # Create audiovisual version
+                audiovisual_animation = create_audiovisual_animation_with_embedded_audio(
+                    split_animation, output_dir
+                )
+                
+                # Render the split
+                renderer = AnimationRenderer(output_dir)
+                split_videos = renderer.render_animation(audiovisual_animation, quality)
+                
+                if split_videos:
+                    # Combine scenes in this split if multiple videos
+                    if len(split_videos) > 1:
+                        combined_path = Path(output_dir) / f"animation_part_{split_num + 1:02d}.mp4"
+                        success = _combine_videos(split_videos, str(combined_path))
+                        if success:
+                            video_paths.append(str(combined_path))
+                            print(f"✅ Split {split_num + 1}: {combined_path.name}")
+                            # Clean up individual scene videos
+                            for video in split_videos:
+                                try:
+                                    Path(video).unlink()
+                                except:
+                                    pass
+                        else:
+                            # If combination fails, keep individual videos
+                            video_paths.extend(split_videos)
+                    else:
+                        # Single video, rename appropriately
+                        old_path = Path(split_videos[0])
+                        new_path = old_path.parent / f"animation_part_{split_num + 1:02d}.mp4"
+                        old_path.rename(new_path)
+                        video_paths.append(str(new_path))
+                        print(f"✅ Split {split_num + 1}: {new_path.name}")
+                
+                scene_idx = end_idx
+            
+            return video_paths
+    
+    # Default behavior: single combined video
+    print("🎞️  Creating single combined video from all scenes")
+
     # Create animation with embedded audio
     audiovisual_animation = create_audiovisual_animation_with_embedded_audio(
         animation, output_dir
     )
 
     # Render the audiovisual animation normally
-    # The audio will be embedded automatically during Manim rendering
     renderer = AnimationRenderer(output_dir)
     video_paths = renderer.render_animation(audiovisual_animation, quality)
+
+    # Combine all videos into single file if multiple scenes
+    if len(video_paths) > 1:
+        combined_path = Path(output_dir) / "complete_animation.mp4"
+        success = _combine_videos(video_paths, str(combined_path))
+        if success:
+            print(f"✅ Combined all scenes into: {combined_path.name}")
+            # Clean up individual scene videos
+            for video in video_paths:
+                try:
+                    Path(video).unlink()
+                except:
+                    pass
+            return [str(combined_path)]
+        else:
+            print("⚠️  Video combination failed, keeping individual scene videos")
+            return video_paths
+    else:
+        # Single scene, rename appropriately
+        if video_paths:
+            old_path = Path(video_paths[0])
+            new_path = old_path.parent / "complete_animation.mp4"
+            old_path.rename(new_path)
+            return [str(new_path)]
 
     if video_paths:
         print(

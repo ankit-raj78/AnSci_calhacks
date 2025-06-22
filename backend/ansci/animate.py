@@ -19,13 +19,19 @@ from .verify import (
 
 from manim import Text, WHITE
 
-# Load environment variables
-import dotenv
-
-dotenv.load_dotenv()
+# Load API key directly from environment
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
+    # Try loading from .env file manually
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                if line.startswith("ANTHROPIC_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip()
+                    break
 
 # Initialize Anthropic client
-api_key = os.getenv("ANTHROPIC_API_KEY")
 ANTHROPIC_CLIENT = anthropic.Anthropic(api_key=api_key)
 
 from manim import *
