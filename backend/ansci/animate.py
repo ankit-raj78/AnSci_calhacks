@@ -453,6 +453,9 @@ REQUIREMENTS:
 10. Focus on making complex concepts easy to understand
 11. Consider the context and user preferences provided
 12. If this is part of a series, ensure it builds appropriately on previous concepts
+13. IMPORTANT: Only use basic Manim imports - do NOT import external libraries like librosa, scipy, etc.
+14. Use only: from manim import *, numpy as np, functools.wraps - no other imports
+15. Keep animations simple and avoid complex mathematical computations
 
 TEMPLATE STRUCTURE:
 ```python
@@ -525,8 +528,6 @@ Generate ONLY the Python code for the complete Manim scene. Make it educational,
     return generated_code
 
 
-def _generate_manim_code_template(content: str, scene_name: str, description: str) -> str:
-    """Fallback template-based Manim code generation"""
 def _generate_manim_code_template(content: str, scene_name: str, description: str) -> str:
     """Fallback template-based Manim code generation"""
     
@@ -696,3 +697,52 @@ if __name__ == "__main__":
     print("✅ Animation presets & consistent styling")
     print("✅ Original interface preserved")
     print("\nReady for production animation creation! 🚀")
+
+
+def generate_manim_code_with_embedded_audio(scene_block: AnsciSceneBlock, scene_name: str, audio_file_path: str) -> str:
+    """
+    Generate Manim code with embedded audio using self.add_sound()
+    This approach embeds audio directly in the video during Manim rendering
+    """
+    
+    # Get the original Manim code
+    original_code = scene_block.manim_code
+    
+    # Convert to absolute path for Manim
+    from pathlib import Path
+    abs_audio_path = Path(audio_file_path).resolve()
+    
+    # Insert audio embedding at the beginning of construct method
+    audio_line = f'        # Embedded audio narration\n        self.add_sound("{abs_audio_path}")\n'
+    
+    # Find the construct method and insert audio after it
+    lines = original_code.split('\n')
+    modified_lines = []
+    
+    for i, line in enumerate(lines):
+        modified_lines.append(line)
+        
+        # Insert audio right after "def construct(self):"
+        if 'def construct(self):' in line:
+            modified_lines.append(audio_line)
+    
+    return '\n'.join(modified_lines)
+
+
+def create_audiovisual_scene_block(scene_block: AnsciSceneBlock, audio_file_path: str, scene_name: str) -> AnsciSceneBlock:
+    """
+    Create a new scene block with embedded audio in the Manim code
+    """
+    # Generate new Manim code with embedded audio
+    audiovisual_manim_code = generate_manim_code_with_embedded_audio(
+        scene_block, 
+        scene_name, 
+        audio_file_path
+    )
+    
+    # Create new scene block with embedded audio
+    return AnsciSceneBlock(
+        transcript=scene_block.transcript,
+        description=f"[WITH AUDIO] {scene_block.description}",
+        manim_code=audiovisual_manim_code
+    )

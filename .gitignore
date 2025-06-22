@@ -38,6 +38,28 @@ production_output/
 *.jpeg
 *.gif
 
+# Audio files (all formats)
+*.mp3
+*.wav
+*.aiff
+*.aac
+*.ogg
+*.flac
+*.m4a
+*.wma
+*.opus
+*.webm
+*.amr
+*.3gp
+*.ra
+*.au
+*.caf
+*.aifc
+audio_output/
+voice_overs/
+narrations/
+audio/
+
 # Python bytecode and caches
 __pycache__/
 *.pyc

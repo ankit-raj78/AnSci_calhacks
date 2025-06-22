@@ -342,6 +342,49 @@ def render_complete_animation(animation: AnsciAnimation, output_name: str = "com
     return ""
 
 
+def render_audiovisual_animation_embedded(animation: AnsciAnimation, output_dir: str = None, quality: str = "high", enable_validation: bool = True) -> List[str]:
+    """
+    Render audiovisual animation using embedded audio approach
+    This uses Manim's self.add_sound() to embed audio directly in videos
+    
+    Args:
+        animation: Animation to render with embedded audio
+        output_dir: Directory for output files
+        quality: Rendering quality
+        enable_validation: Whether to validate before rendering
+        
+    Returns:
+        List of paths to audiovisual video files
+    """
+    from .audio import create_audiovisual_animation_with_embedded_audio
+    
+    if enable_validation and not validate_animation(animation):
+        print("❌ Animation validation failed")
+        return []
+    
+    print("🎬🎙️  Starting embedded audiovisual animation rendering...")
+    
+    # Create animation with embedded audio
+    audiovisual_animation = create_audiovisual_animation_with_embedded_audio(
+        animation, 
+        output_dir
+    )
+    
+    # Render the audiovisual animation normally
+    # The audio will be embedded automatically during Manim rendering
+    renderer = AnimationRenderer(output_dir)
+    video_paths = renderer.render_animation(audiovisual_animation, quality)
+    
+    if video_paths:
+        print(f"✅ Embedded audiovisual rendering complete: {len(video_paths)} videos with synchronized audio")
+        for i, path in enumerate(video_paths):
+            print(f"   📹🎙️  Scene {i+1}: {Path(path).name}")
+    else:
+        print("❌ No audiovisual videos were rendered")
+    
+    return video_paths
+
+
 if __name__ == "__main__":
     print("🎬 Animation Rendering Service with Quality Assurance")
     print("=" * 55)
