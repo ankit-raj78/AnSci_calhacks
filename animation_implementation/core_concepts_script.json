@@ -1,0 +1,73 @@
+{
+  "title": "Attention Is All You Need - Core Concepts",
+  "total_duration_estimate": "10-15 minutes",
+  "scenes": [
+    {
+      "id": "problem",
+      "title": "The Problem with Sequential Processing",
+      "duration_estimate": "2-3 minutes",
+      "narration": "\n        Before Transformers, AI models processed text word by word, like reading \n        a book one word at a time. This was slow and made it hard to understand \n        connections between distant words. Imagine trying to understand a long \n        sentence but forgetting the beginning by the time you reach the end.\n        ",
+      "key_points": [
+        "Sequential processing is slow",
+        "Hard to capture long-range dependencies",
+        "Cannot parallelize computation",
+        "Information bottleneck problem"
+      ],
+      "visual_concept": "Animation showing slow sequential processing vs fast parallel processing"
+    },
+    {
+      "id": "attention_concept",
+      "title": "What is Attention?",
+      "duration_estimate": "2-3 minutes",
+      "narration": "\n        Attention is like having a spotlight that can focus on different parts \n        of a sentence at once. When processing the word 'it', attention helps \n        the model look back and focus on what 'it' refers to, even if it's \n        many words away. This mimics how humans naturally read and understand text.\n        ",
+      "key_points": [
+        "Attention = selective focus mechanism",
+        "Can look at any part of the input",
+        "Weighs importance of different words",
+        "Inspired by human cognitive attention"
+      ],
+      "visual_concept": "Spotlight animation showing attention focusing on different words"
+    },
+    {
+      "id": "self_attention",
+      "title": "Self-Attention: The Key Innovation",
+      "duration_estimate": "3-4 minutes",
+      "narration": "\n        Self-attention is the breakthrough idea. Instead of processing words \n        one by one, every word looks at every other word simultaneously and \n        decides how much attention to pay to each. It's like having a \n        conversation where everyone can listen to everyone else at the same time.\n        ",
+      "key_points": [
+        "Every word attends to every other word",
+        "Parallel processing - no sequential bottleneck",
+        "Creates rich contextual representations",
+        "Scalable to very long sequences"
+      ],
+      "formula": "Attention(Q,K,V) = softmax(QK^T/\u221ad)V",
+      "formula_explanation": "\n        Q = Query (what am I looking for?)\n        K = Key (what information is available?)  \n        V = Value (the actual information)\n        The formula finds relevant information and combines it.\n        ",
+      "visual_concept": "Matrix animation showing all-to-all attention connections"
+    },
+    {
+      "id": "architecture",
+      "title": "The Transformer Architecture",
+      "duration_estimate": "2-3 minutes",
+      "narration": "\n        The Transformer combines multiple attention mechanisms in a smart way. \n        It has an encoder that understands the input text and a decoder that \n        generates the output. Multiple attention 'heads' look at different \n        aspects of the text simultaneously, like having multiple experts \n        each focusing on different linguistic patterns.\n        ",
+      "key_points": [
+        "Multi-Head Attention: Multiple attention mechanisms in parallel",
+        "Encoder-Decoder: Separate understanding and generation components",
+        "Position Encoding: Gives the model a sense of word order",
+        "Feed-Forward Networks: Process the attended information"
+      ],
+      "visual_concept": "Simplified architecture diagram with encoder/decoder blocks"
+    },
+    {
+      "id": "impact",
+      "title": "Revolutionary Impact",
+      "duration_estimate": "1-2 minutes",
+      "narration": "\n        The Transformer didn't just improve performance - it changed everything. \n        It enabled models like BERT, GPT, and ChatGPT. By showing that \n        'attention is all you need', it proved that complex AI could be built \n        with simpler, more parallelizable components. This led to the current \n        AI revolution we see today.\n        ",
+      "key_points": [
+        "Enabled modern language models (GPT, BERT, etc.)",
+        "Made large-scale AI training feasible",
+        "Inspired attention mechanisms across all AI domains",
+        "Foundation of current AI revolution"
+      ],
+      "visual_concept": "Timeline showing models enabled by Transformers"
+    }
+  ]
+}
