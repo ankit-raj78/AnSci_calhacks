@@ -10,6 +10,19 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: Main",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/backend/main.py",
+            "args": [
+                "--paper",
+                "/Users/pushkarnimkar/Downloads/Papers/visualAMM.pdf",
+                "--output",
+                "${workspaceFolder}/backend/test.mp4",
+            ],
+            "console": "integratedTerminal"
         }
     ]
 }
