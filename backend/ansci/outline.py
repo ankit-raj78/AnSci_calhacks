@@ -1,4 +1,4 @@
-from models import AnsciOutline
+from .models import AnsciOutline
 import anthropic
 from dotenv import load_dotenv
 import os
@@ -46,29 +46,30 @@ def generate_outline(history: list[dict]) -> AnsciOutline | None:
     
 
 
-pdf_url = "https://www.cs.cmu.edu/~conitzer/visualAMM.pdf"
-pdf_data = base64.standard_b64encode(httpx.get(pdf_url).content).decode("utf-8")
 
-history=[
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": pdf_data
-                    }
-                },
-                {
-                    "type": "text",
-                    "text": "Can you summarize the paper briefly?"
-                }
-            ]
-        }
-    ]
 
 
 if __name__ == "__main__":
+    pdf_url = "https://www.cs.cmu.edu/~conitzer/visualAMM.pdf"
+    pdf_data = base64.standard_b64encode(httpx.get(pdf_url).content).decode("utf-8")
+
+    history=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": pdf_data
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": "Can you summarize the paper briefly?"
+                    }
+                ]
+            }
+        ]
     print(generate_outline(history))

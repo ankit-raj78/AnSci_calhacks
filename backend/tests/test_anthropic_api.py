@@ -1,5 +1,5 @@
-from re import S
 import anthropic
+from anthropic.types import TextBlock
 import os
 
 import dotenv
@@ -14,7 +14,10 @@ def test_anthropic_api():
         max_tokens=100,
         messages=[{"role": "user", "content": "Hello, world!"}],
     )
-    print(response)
+
+    message = response.content[0]
+    if isinstance(message, TextBlock):
+        print(message.text)
 
 
 test_anthropic_api()
