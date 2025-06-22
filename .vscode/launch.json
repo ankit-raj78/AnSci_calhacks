@@ -18,9 +18,9 @@
             "program": "${workspaceFolder}/backend/main.py",
             "args": [
                 "--paper",
-                "${workspaceFolder}/tmp/visualAMM.pdf",
+                "${workspaceFolder}/papers/2201.00318v2.pdf",
                 "--output",
-                "${workspaceFolder}/backend/test.mp4",
+                "${workspaceFolder}/backend/test_output",
             ],
             "console": "integratedTerminal"
         }
