@@ -114,3 +114,4 @@ output/
 outputs/
 renders/
 tmp/
+uv.lock

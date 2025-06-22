@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-
-=======
 # AnSci Backend
 
 Core animation generation service for creating educational videos.
@@ -31,4 +28,3 @@ The system follows a clean workflow:
 4. Get high-quality MP4 videos
 
 Production-ready and tested! 🚀
->>>>>>> 3a3c64b1da6a8bcadda67c01fa3bbac7fce0894b
