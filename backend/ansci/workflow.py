@@ -86,7 +86,7 @@ def create_animation(
             print(f"✅ Scene {i+1}: {scene.description[:60]}...")
 
             # Limit scenes for testing (remove in production)
-            if len(scene_blocks) >= 3:  # Process max 3 scenes
+            if len(scene_blocks) >= 1:  # Process max 3 scenes
                 print(f"⚡ Limited to {len(scene_blocks)} scenes for testing")
                 break
 

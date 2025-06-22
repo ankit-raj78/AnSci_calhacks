@@ -7,10 +7,24 @@ Uses Anthropic SDK for intelligent Manim code generation
 
 import os
 import anthropic
-from anthropic.types import MessageParam
-from typing import Generator, List
+from anthropic.types import MessageParam, ToolUseBlock
+from typing import Generator, List, TypedDict
 from functools import wraps
 from .models import AnsciOutline, AnsciSceneBlock, AnsciAnimation
+from pydantic import BaseModel, Field
+
+
+class SceneDescription(BaseModel):
+    """Composite scene description containing both transcript and visual description"""
+
+    transcript: str = Field(
+        description="30-60 seconds of narration (about 75-150 words), educational but accessible tone"
+    )
+    description: str = Field(
+        description="Visual description of animations, 20-40 words maximum, specific about what viewers will see"
+    )
+
+
 from .verify import (
     validate_generated_manim_code,
     ValidationResult,
@@ -180,28 +194,27 @@ def create_ansci_animation(
     print(f"💬 Using context from {len(history)} history messages")
 
     # Extract context from history for better generation
-    user_context = _extract_context_from_history(history)
+    # user_context = _extract_context_from_history(history)
 
     for i, outline_block in enumerate(outline.blocks):
         print(f"🎬 Generating Scene {i+1}/{len(outline.blocks)}...")
 
         # Generate scene components from outline with context
-        transcript = _generate_transcript_from_outline(
-            outline_block.text, i, user_context
-        )
-        description = _generate_scene_description(outline_block.text, i, user_context)
+        scene_content = _generate_scene_content(outline_block.text, i)
+        if scene_content is None:
+            print(f"❌ Failed to generate scene content for Scene {i+1}")
+            continue
 
         # Generate Manim code using Anthropic with full context
         manim_code = _generate_manim_code_from_content(
             content=outline_block.text,
             scene_name=f"Scene{i+1}",
-            description=description,
+            description=scene_content.description,
             context={
                 "history": history,
                 "outline_title": outline.title,
                 "scene_index": i,
                 "total_scenes": len(outline.blocks),
-                "user_context": user_context,
             },
         )
 
@@ -228,13 +241,12 @@ def create_ansci_animation(
                 manim_code = _generate_manim_code_with_validation_fixes(
                     content=outline_block.text,
                     scene_name=f"Scene{i+1}",
-                    description=description,
+                    description=scene_content.description,
                     context={
                         "history": history,
                         "outline_title": outline.title,
                         "scene_index": i,
                         "total_scenes": len(outline.blocks),
-                        "user_context": user_context,
                     },
                     previous_errors=validation_result.errors,
                 )
@@ -256,76 +268,78 @@ def create_ansci_animation(
             print(f"⚠️  Proceeding with Scene {i+1} despite validation errors...")
 
         scene_block = AnsciSceneBlock(
-            transcript=transcript, description=description, manim_code=manim_code
+            transcript=scene_content.transcript,
+            description=scene_content.description,
+            manim_code=manim_code,
         )
 
-        print(f"✅ Generated Scene {i+1}: {description[:50]}...")
+        print(f"✅ Generated Scene {i+1}: {scene_content.description[:50]}...")
         yield scene_block
 
 
-def _extract_context_from_history(history: list[MessageParam]) -> dict:
-    """Extract relevant context from chat history for better animation generation"""
-    context = {
-        "user_preferences": [],
-        "key_topics": [],
-        "focus_areas": [],
-        "questions": [],
-    }
+# def _extract_context_from_history(history: list[MessageParam]) -> dict:
+#     """Extract relevant context from chat history for better animation generation"""
+#     context = {
+#         "user_preferences": [],
+#         "key_topics": [],
+#         "focus_areas": [],
+#         "questions": [],
+#     }
 
-    for message in history:
-        content = message.get("content", "")
-        role = message.get("role", "")
+#     for message in history:
+#         content = message.get("content", "")
+#         role = message.get("role", "")
 
-        if role == "user":
-            # Handle content as list (document + text) or string
-            text_content = ""
-            if isinstance(content, list):
-                for item in content:
-                    if isinstance(item, dict) and item.get("type") == "text":
-                        text_content += item.get("text", "") + " "
-            elif isinstance(content, str):
-                text_content = content
+#         if role == "user":
+#             # Handle content as list (document + text) or string
+#             text_content = ""
+#             if isinstance(content, list):
+#                 for item in content:
+#                     if isinstance(item, dict) and item.get("type") == "text":
+#                         text_content += item.get("text", "") + " "
+#             elif isinstance(content, str):
+#                 text_content = content
 
-            text_content = text_content.lower()
+#             text_content = text_content.lower()
 
-            # Extract user preferences and questions
-            if "explain" in text_content or "show" in text_content:
-                context["user_preferences"].append(text_content)
-            if "?" in text_content:
-                context["questions"].append(text_content)
-            if "focus" in text_content or "emphasize" in text_content:
-                context["focus_areas"].append(text_content)
+#             # Extract user preferences and questions
+#             if "explain" in text_content or "show" in text_content:
+#                 context["user_preferences"].append(text_content)
+#             if "?" in text_content:
+#                 context["questions"].append(text_content)
+#             if "focus" in text_content or "emphasize" in text_content:
+#                 context["focus_areas"].append(text_content)
 
-        # Extract key topics mentioned
-        key_terms = [
-            "attention",
-            "transformer",
-            "rnn",
-            "lstm",
-            "parallel",
-            "sequential",
-            "bert",
-            "gpt",
-        ]
+#         # Extract key topics mentioned
+#         key_terms = [
+#             "attention",
+#             "transformer",
+#             "rnn",
+#             "lstm",
+#             "parallel",
+#             "sequential",
+#             "bert",
+#             "gpt",
+#         ]
 
-        # Convert content to string for searching
-        content_str = ""
-        if isinstance(content, str):
-            content_str = content
-        elif isinstance(content, list):
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    content_str += item.get("text", "") + " "
-                elif isinstance(item, str):
-                    content_str += item + " "
+#         # Convert content to string for searching
+#         content_str = ""
+#         if isinstance(content, str):
+#             content_str = content
+#         elif isinstance(content, list):
+#             for item in content:
+#                 if isinstance(item, dict) and item.get("type") == "text":
+#                     content_str += item.get("text", "") + " "
+#                 elif isinstance(item, str):
+#                     content_str += item + " "
 
-        content_str = content_str.lower()
+#         content_str = content_str.lower()
 
-        for term in key_terms:
-            if term in content_str:
-                context["key_topics"].append(term)
+#         for term in key_terms:
+#             if term in content_str:
+#                 context["key_topics"].append(term)
 
-    return context
+#     return context
 
 
 def create_complete_animation(
@@ -370,24 +384,22 @@ def create_complete_animation(
 
 
 # Helper functions for content generation
-def _generate_transcript_from_outline(
-    content: str, scene_index: int, context: dict
-) -> str:
-    """Generate narration transcript from outline content with context awareness"""
+def _generate_scene_content(content: str, scene_index: int) -> SceneDescription | None:
+    """Generate both transcript and visual description from outline content with context awareness"""
 
-    # If we have Anthropic API, use it for intelligent transcript generation
-    if ANTHROPIC_CLIENT and context:
-        try:
-            prompt = f"""
-Generate a clear, engaging narration transcript for an educational animation. 
+    prompt = f"""
+Generate both a narration transcript and visual description for an educational animation scene.
 
 CONTENT: {content}
 SCENE INDEX: {scene_index + 1}
-USER CONTEXT: {context.get('user_preferences', [])}
-KEY TOPICS: {context.get('key_topics', [])}
-FOCUS AREAS: {context.get('focus_areas', [])}
 
-Requirements:
+Please provide your response as a JSON object with the following structure:
+{{
+    "transcript": "your transcript text here",
+    "description": "your description text here"
+}}
+
+Requirements for transcript:
 - 30-60 seconds of narration (about 75-150 words)
 - Educational but accessible tone
 - Connect to user's interests and questions
@@ -395,58 +407,7 @@ Requirements:
 - Use analogies and examples where helpful
 - Engaging and conversational style
 
-Generate ONLY the transcript text, no additional formatting.
-"""
-
-            response = ANTHROPIC_CLIENT.messages.create(
-                model="claude-sonnet-4-20250514",  # Sonnet 4 with 400k input context
-                max_tokens=32000,  # Maximum output tokens for Sonnet 4
-                temperature=1.0,
-                stream=True,  # Enable streaming for long requests
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            # Collect streamed response
-            full_response = ""
-            for chunk in response:
-                if (
-                    chunk.type == "content_block_delta"
-                    and chunk.delta.type == "text_delta"
-                ):
-                    full_response += chunk.delta.text
-
-            return full_response.strip()
-        except Exception as e:
-            print(f"⚠️  Anthropic transcript generation failed: {e}")
-
-    # Fallback to predefined transcripts
-    transcripts = [
-        "Traditional neural networks processed text sequentially, one word at a time. This approach was slow and couldn't take advantage of parallel computing.",
-        "The attention mechanism changed everything. Instead of processing words one by one, attention allows the model to look at all words simultaneously.",
-        "Self-attention is the core innovation. Every word in a sentence looks at every other word to understand its meaning in context.",
-        "Multi-head attention uses multiple attention mechanisms in parallel, capturing various types of linguistic patterns simultaneously.",
-        "The Transformer architecture combines these attention mechanisms into a complete system with encoder and decoder stacks.",
-        "This breakthrough enabled the AI revolution we see today. From BERT to GPT to ChatGPT, virtually all modern language AI uses Transformers.",
-    ]
-
-    return transcripts[scene_index] if scene_index < len(transcripts) else content
-
-
-def _generate_scene_description(content: str, scene_index: int, context: dict) -> str:
-    """Generate visual description from content with context awareness"""
-
-    # If we have Anthropic API, use it for intelligent description generation
-    if ANTHROPIC_CLIENT and context:
-        try:
-            prompt = f"""
-Generate a clear visual description for an educational animation scene.
-
-CONTENT: {content}
-SCENE INDEX: {scene_index + 1}
-USER CONTEXT: {context.get('user_preferences', [])}
-KEY TOPICS: {context.get('key_topics', [])}
-
-Requirements:
+Requirements for description:
 - Describe the visual elements and animations
 - Focus on educational clarity
 - Specify colors, layouts, and transitions
@@ -454,45 +415,39 @@ Requirements:
 - 20-40 words maximum
 - Be specific about what viewers will see
 
-Generate ONLY the description text, no additional formatting.
+Generate ONLY the JSON object, no additional formatting.
 """
 
-            response = ANTHROPIC_CLIENT.messages.create(
-                model="claude-sonnet-4-20250514",  # Use Sonnet 4 for high quality descriptions
-                max_tokens=8192,  # Maximum tokens for Sonnet 4
-                temperature=1.0,
-                stream=True,  # Enable streaming for long requests
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            # Collect streamed response
-            full_response = ""
-            for chunk in response:
-                if (
-                    chunk.type == "content_block_delta"
-                    and chunk.delta.type == "text_delta"
-                ):
-                    full_response += chunk.delta.text
-
-            return full_response.strip()
-        except Exception as e:
-            print(f"⚠️  Anthropic description generation failed: {e}")
-
-    # Fallback descriptions
-    descriptions = [
-        "Visual showing sequential processing vs parallel processing demonstration",
-        "Animation of attention weights as colored connections between words",
-        "Diagram showing self-attention mechanism with Q, K, V matrices",
-        "Multiple attention heads working in parallel with different patterns",
-        "Complete Transformer architecture with encoder-decoder structure",
-        "Timeline showing impact from 2017 Transformer paper to modern AI",
-    ]
-
-    return (
-        descriptions[scene_index]
-        if scene_index < len(descriptions)
-        else f"Visual representation of: {content[:100]}..."
+    response = ANTHROPIC_CLIENT.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8192,
+        temperature=1.0,
+        stream=False,
+        tools=[
+            {
+                "name": "generate_scene_content",
+                "description": "Generate scene content with transcript and description",
+                "input_schema": SceneDescription.model_json_schema(),
+            }
+        ],
+        tool_choice={"type": "tool", "name": "generate_scene_content"},
+        messages=[{"role": "user", "content": prompt}],
     )
+
+    tool_block = None
+    for block in response.content:
+        if isinstance(block, ToolUseBlock):
+            tool_block = block
+            break
+
+    if tool_block:
+        return SceneDescription(**tool_block.input)  # type: ignore
+    else:
+        return None
+
+    # # Extract tool result
+    # tool_use = next(block for block in response.content if block.type == "tool_use")  # type: ignore  # noqa: E501
+    # return
 
 
 def _generate_manim_code_from_content(
